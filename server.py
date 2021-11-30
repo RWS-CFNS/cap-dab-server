@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import datetime                             # Date and time manipulator
 import pyexpat                              # XML parser backend (only used for version check)
 import xml.etree.ElementTree as Xml         # XML parser
@@ -57,10 +59,11 @@ def get_response():
     scope.text = 'Public'
 
     references = Xml.SubElement(root, 'references')
-    references.text = 'TODO' # FIXME don't hardcore
+    references.text = 'TODO' # FIXME don't hardcore, derive from request
 
     return Xml.tostring(root, encoding='unicode', xml_declaration=True)
 
+# Check the elements in the <info> container for CAP v1.2 and NL Subbroker conformity
 def check_info_elements(info):
     # List of _required_ elements in the <info> container
     info_elements = ('category', 'event', 'urgency', 'severity', 'certainty')
@@ -109,6 +112,7 @@ def check_info_elements(info):
 
     return True
 
+# Check the elements in the <alert> container for CAP v1.2 and NL Subbroker conformity
 def check_alert_elements(alert):
     # List of _required_ elements in the <alert> container
     alert_elements = ('identifier', 'sender', 'sent', 'status', 'msgType', 'scope')
@@ -163,7 +167,7 @@ def check_alert_elements(alert):
 
     return True
 
-# Main request handler
+# Main HTTP POST request handler
 @app.post('/')
 def index():
     content_type = request.content_type
@@ -191,6 +195,10 @@ def index():
     if not check_alert_elements(root):
         return Response(status=400)
 
+    # Handle the response
+    # TODO
+
+    # Generate an appropriate response
     xml = get_response()
     return Response(response=xml, status=200, content_type='application/xml; charset=utf-8')
 
@@ -198,10 +206,12 @@ def index():
 # See https://docs.python.org/3/library/xml.html#xml-vulnerabilitiesk
 def version_check():
     ver = pyexpat.version_info
-    assert ver[0] >= 2 and ver[1] >= 4 and ver[2] >= 1
-
-def main():
-    version_check()
+    if ver[0] < 2 or ver[1] < 4 or ver[2] < 1:
+        print('FAIL: PyExpat 2.4.1+ is required but not found on this system')
+        exit(1)
 
 if __name__ == '__main__':
-    main()
+    version_check()
+
+    # start Flask (HTTP server)
+    app.run(debug=True)
