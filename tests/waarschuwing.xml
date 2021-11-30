@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+	<identifier>demoAdapter.5362.Alert.5362</identifier>
+	<sender>public-warning-portal@one2many.eu</sender>
+	<sent>2019-06-24T13:45:06+02:00</sent>
+	<status>Actual</status>
+	<msgType>Alert</msgType>
+	<scope>Public</scope>
+	<info>
+		<language>nl-NL</language>
+		<category>Safety</category>
+		<event>Alert</event>
+		<urgency>Unknown</urgency>
+		<severity>Unknown</severity>
+		<certainty>Unknown</certainty>
+		<effective>2019-06-24T13:45:06+02:00</effective>
+		<expires>2019-06-24T14:45:06+02:00</expires>
+		<description>NL-Alert 24-06-2019 13:45
+Ivm zeer grote brand met rook in Sneek. Ramen en deuren sluiten en ventilatie uitzetten. Nadere info op twitter pagina Veiligheidsregio Friesland</description>
+		<area>
+			<areaDesc>Alert area</areaDesc>
+			<polygon>53.0308,5.6813 53.0341,5.6826 53.1228,5.7259 53.0709,5.822 53.0308,5.6813</polygon>
+		</area>
+	</info>
+</alert>
