@@ -1,23 +1,34 @@
-import datetime                     # Date and time manipulator
-import pyexpat                      # XML parser backend (only used for version check)
-import xml.etree.ElementTree as Xml # XML parser
+import datetime                         # Date and time manipulator
+import xml.etree.ElementTree as Xml     # XML parser
+import logging                          # Logging facilities
+
+# Log via logging.error or logging.warning depending on whether strict CAP parsing is enforced or not
+# Return bool:
+# - True if strict parsing is enabled
+# - False if strict parsing is disabled
+def logging_strict(msg):
+    if strict:
+        logging.error(msg)
+        return True
+    else:
+        logging.warning(msg)
+        return False
 
 class CAPParser:
     # CAP version namespaces
     # NOTE: CAP v1.2 is hardcoded right now
-    ns = {
+    NS = {
             'CAPv1.2': 'urn:oasis:names:tc:emergency:cap:1.2'
     }
 
     # timestamp format specified in the CAP v1.2 standard
     TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%S%z'
 
-    def __init__(self):
-        # Check if the version of PyExpat is vulnerable to XML DDoS attacks (version 2.4.1+).
-        # See https://docs.python.org/3/library/xml.html#xml-vulnerabilitiesk
-        ver = pyexpat.version_info
-        if ver[0] < 2 or ver[1] < 4 or ver[2] < 1:
-            raise ModuleNotFoundError('PyExpat 2.4.1+ is required but not found on this system')
+    # parse stricty, adhering to not only the CAP v1.2 standard but also the NL Subbroker standards
+    strict = False
+
+    def __init__(self, strict):
+        self.strict = strict
 
     # Generate a current timestamp
     def generate_timestamp(self):
@@ -32,10 +43,10 @@ class CAPParser:
     # Generate an acknowledgement
     # This applies to all types of requests as they all expect the same format of acknowledgement.
     def generate_response(self):
-        capns = self.ns['CAPv1.2']
+        capns = self.NS['CAPv1.2']
 
         root = Xml.Element('alert')
-        root.attrib = { 'xmlns': self.ns['CAPv1.2'] }
+        root.attrib = { 'xmlns': self.NS['CAPv1.2'] }
 
         identifier = Xml.SubElement(root, 'identifier')
         identifier.text = 'cfns.identifier.xxx' # FIXME don't hardcode
@@ -74,44 +85,42 @@ class CAPParser:
 
         # check for the presence of required elements
         for e in info_elements:
-            if info.find(f'CAPv1.2:{e}', self.ns) is None:
-                print(f'FAIL: required element missing from <info> container: {e}')
+            if info.find(f'CAPv1.2:{e}', self.NS) is None:
+                logging.error(f'required element missing from <info> container: {e}')
                 return False
 
         # check <language>, as it should basically always be present
-        if info.find(f'CAPv1.2:language', self.ns) is None:
-            print(f'{"FAIL" if strict else "WARN"}: required element missing from <info> container: language')
-
+        if info.find(f'CAPv1.2:language', self.NS) is None:
             # Allow when not running in strict mode
-            if strict:
+            if logging_strict('{required element missing from <info> container: language'):
                 return False
 
         # check <category>, it should always have a value of 'Safety'
         # though this may be different in practise, so we just throw a warning
-        category = info.find(f'CAPv1.2:category', self.ns).text
+        category = info.find(f'CAPv1.2:category', self.NS).text
         if category != 'Safety':
-            print(f'WARN: invalid category: {category}')
+            logging.warning(f'invalid category: {category}')
 
         # these fields should always return 'Unknown' from an NL Subbroker
         # though this may be different in practise, so we just throw a warning
-        urgency = info.find(f'CAPv1.2:urgency', self.ns).text
+        urgency = info.find(f'CAPv1.2:urgency', self.NS).text
         if urgency != 'Unknown':
-            print(f'WARN: invalid urgency: {urgency}')
-        severity = info.find(f'CAPv1.2:severity', self.ns).text
+            logging.warning(f'invalid urgency: {urgency}')
+        severity = info.find(f'CAPv1.2:severity', self.NS).text
         if severity != 'Unknown':
-            print(f'WARN: invalid severity: {severity}')
-        certainty = info.find(f'CAPv1.2:certainty', self.ns).text
+            logging.warning(f'invalid severity: {severity}')
+        certainty = info.find(f'CAPv1.2:certainty', self.NS).text
         if certainty != 'Unknown':
-            print(f'WARN: invalid certainty: {certainty}')
+            logging.warning(f'invalid certainty: {certainty}')
 
         # check if the <effective> and <expires> timestamps are formatted correctly
-        effective = info.find('CAPv1.2:effective', self.ns).text
+        effective = info.find('CAPv1.2:effective', self.NS).text
         if self.check_timestamp(effective) is None:
-            print(f'FAIL: invalid <effective> timestamp format: {effective}')
+            logging.error(f'invalid <effective> timestamp format: {effective}')
             return False
-        expires = info.find('CAPv1.2:expires', self.ns).text
+        expires = info.find('CAPv1.2:expires', self.NS).text
         if self.check_timestamp(expires) is None:
-            print(f'FAIL: invalid <expires> timestamp format: {expires}')
+            logging.error(f'invalid <expires> timestamp format: {expires}')
             return False
 
         return True
@@ -123,29 +132,28 @@ class CAPParser:
 
         # check for the presence of required elements
         for e in alert_elements:
-            if alert.find(f'CAPv1.2:{e}', self.ns) is None:
-                print(f'FAIL: required element missing from <alert> container: {e}')
+            if alert.find(f'CAPv1.2:{e}', self.NS) is None:
+                logging.error(f'required element missing from <alert> container: {e}')
                 return False
 
         # check if the timestamp is formatted correctly
-        timestamp = alert.find('CAPv1.2:sent', self.ns).text
+        timestamp = alert.find('CAPv1.2:sent', self.NS).text
         if self.check_timestamp(timestamp) is None:
-            print(f'FAIL: invalid <sent> timestamp format: {timestamp}')
+            logging.error(f'invalid <sent> timestamp format: {timestamp}')
             return False
 
-        msgType = alert.find('CAPv1.2:msgType', self.ns).text
-        status = alert.find('CAPv1.2:status', self.ns).text
+        msgType = alert.find('CAPv1.2:msgType', self.NS).text
+        status = alert.find('CAPv1.2:status', self.NS).text
 
         if msgType == 'Alert':
             # check if <info> is present when <msgType> has the value 'Alert'
             # This is required by the standard, but poorly implemented in practise.
-            # Even the "link test" example in the One2Many document doesn't demonstrate this properly
             #
             # We will ignore this (even in strict mode) when <status> has the value 'Test'
             if status != 'Test':
-                info = alert.find(f'CAPv1.2:info', self.ns)
+                info = alert.find(f'CAPv1.2:info', self.NS)
                 if info is None:
-                    print('FAIL: required element missing from <alert> container: info')
+                    logging.error('required element missing from <alert> container: info')
                     return False
 
                 # check the <info> container element
@@ -153,20 +161,18 @@ class CAPParser:
                     return False
         elif msgType == 'Cancel':
             # Check <msgType> separately because it influences whether the element <references> is required
-            if alert.find('CAPv1.2:references', self.ns) is None:
-                print(f'{"FAIL" if strict else "WARN"}: required element missing from <alert> container: references')
+            if alert.find('CAPv1.2:references', self.NS) is None:
                 # We can just give a warning because the documentation isn't 100% clear on whether this
                 # should really be enforced
-                if strict:
+                if logging_strict('required element missing from <alert> container: references'):
                     return False
 
         # check <scope>, as it should always be 'Public'
-        scope = alert.find('CAPv1.2:scope', self.ns).text
+        scope = alert.find('CAPv1.2:scope', self.NS).text
         if scope != 'Public':
-            print(f'{"FAIL" if strict else "WARN"}: invalid scope: {scope}')
             # In production this should always be 'Public'. In a development/test environment this may
             # not always be this case.
-            if strict:
+            if logging_strict(f'invalid scope: {scope}'):
                 return False
 
         return True
@@ -181,13 +187,12 @@ class CAPParser:
         try:
             root = Xml.fromstring(raw)
         except Xml.ParseError:
-            print('FAIL: invalid XML schema received')
+            logging.error('invalid XML schema received')
             return False
 
         # Check the if the namespace matches what is expected of the main broker (CAP v1.2)
-        if root.tag != f'{{{self.ns["CAPv1.2"]}}}alert':
-            print(f'{"FAIL" if strict else "WARN"}: invalid namespace: {root.tag}')
-            if strict:
+        if root.tag != f'{{{self.NS["CAPv1.2"]}}}alert':
+            if logging_strict(f'invalid namespace: {root.tag}'):
                 return False
 
         # Check if all required elements are present
