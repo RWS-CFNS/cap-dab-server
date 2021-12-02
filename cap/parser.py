@@ -1,17 +1,16 @@
 import datetime                         # Date and time manipulator
 import xml.etree.ElementTree as Xml     # XML parser
-import logging                          # Logging facilities
 
 # Log via logging.error or logging.warning depending on whether strict CAP parsing is enforced or not
 # Return bool:
 # - True if strict parsing is enabled
 # - False if strict parsing is disabled
-def logging_strict(msg):
+def logger_strict(app, msg):
     if strict:
-        logging.error(msg)
+        app.logger.error(msg)
         return True
     else:
-        logging.warning(msg)
+        app.logger.warning(msg)
         return False
 
 class CAPParser:
@@ -27,7 +26,8 @@ class CAPParser:
     # parse stricty, adhering to not only the CAP v1.2 standard but also the NL Subbroker standards
     strict = False
 
-    def __init__(self, strict):
+    def __init__(self, app, strict):
+        self.app = app
         self.strict = strict
 
     # Generate a current timestamp
@@ -86,41 +86,41 @@ class CAPParser:
         # check for the presence of required elements
         for e in info_elements:
             if info.find(f'CAPv1.2:{e}', self.NS) is None:
-                logging.error(f'required element missing from <info> container: {e}')
+                self.app.logger.error(f'required element missing from <info> container: {e}')
                 return False
 
         # check <language>, as it should basically always be present
         if info.find(f'CAPv1.2:language', self.NS) is None:
             # Allow when not running in strict mode
-            if logging_strict('{required element missing from <info> container: language'):
+            if logger_strict('{required element missing from <info> container: language'):
                 return False
 
         # check <category>, it should always have a value of 'Safety'
         # though this may be different in practise, so we just throw a warning
         category = info.find(f'CAPv1.2:category', self.NS).text
         if category != 'Safety':
-            logging.warning(f'invalid category: {category}')
+            self.app.logger.warning(f'invalid category: {category}')
 
         # these fields should always return 'Unknown' from an NL Subbroker
         # though this may be different in practise, so we just throw a warning
         urgency = info.find(f'CAPv1.2:urgency', self.NS).text
         if urgency != 'Unknown':
-            logging.warning(f'invalid urgency: {urgency}')
+            self.app.logger.warning(f'invalid urgency: {urgency}')
         severity = info.find(f'CAPv1.2:severity', self.NS).text
         if severity != 'Unknown':
-            logging.warning(f'invalid severity: {severity}')
+            self.app.logger.warning(f'invalid severity: {severity}')
         certainty = info.find(f'CAPv1.2:certainty', self.NS).text
         if certainty != 'Unknown':
-            logging.warning(f'invalid certainty: {certainty}')
+            self.app.logger.warning(f'invalid certainty: {certainty}')
 
         # check if the <effective> and <expires> timestamps are formatted correctly
         effective = info.find('CAPv1.2:effective', self.NS).text
         if self.check_timestamp(effective) is None:
-            logging.error(f'invalid <effective> timestamp format: {effective}')
+            self.app.logger.error(f'invalid <effective> timestamp format: {effective}')
             return False
         expires = info.find('CAPv1.2:expires', self.NS).text
         if self.check_timestamp(expires) is None:
-            logging.error(f'invalid <expires> timestamp format: {expires}')
+            self.app.logger.error(f'invalid <expires> timestamp format: {expires}')
             return False
 
         return True
@@ -133,13 +133,13 @@ class CAPParser:
         # check for the presence of required elements
         for e in alert_elements:
             if alert.find(f'CAPv1.2:{e}', self.NS) is None:
-                logging.error(f'required element missing from <alert> container: {e}')
+                self.app.logger.error(f'required element missing from <alert> container: {e}')
                 return False
 
         # check if the timestamp is formatted correctly
         timestamp = alert.find('CAPv1.2:sent', self.NS).text
         if self.check_timestamp(timestamp) is None:
-            logging.error(f'invalid <sent> timestamp format: {timestamp}')
+            self.app.logger.error(f'invalid <sent> timestamp format: {timestamp}')
             return False
 
         msgType = alert.find('CAPv1.2:msgType', self.NS).text
@@ -153,7 +153,7 @@ class CAPParser:
             if status != 'Test':
                 info = alert.find(f'CAPv1.2:info', self.NS)
                 if info is None:
-                    logging.error('required element missing from <alert> container: info')
+                    self.app.logger.error('required element missing from <alert> container: info')
                     return False
 
                 # check the <info> container element
@@ -164,7 +164,7 @@ class CAPParser:
             if alert.find('CAPv1.2:references', self.NS) is None:
                 # We can just give a warning because the documentation isn't 100% clear on whether this
                 # should really be enforced
-                if logging_strict('required element missing from <alert> container: references'):
+                if logger_strict('required element missing from <alert> container: references'):
                     return False
 
         # check <scope>, as it should always be 'Public'
@@ -172,7 +172,7 @@ class CAPParser:
         if scope != 'Public':
             # In production this should always be 'Public'. In a development/test environment this may
             # not always be this case.
-            if logging_strict(f'invalid scope: {scope}'):
+            if logger_strict(f'invalid scope: {scope}'):
                 return False
 
         return True
@@ -187,12 +187,12 @@ class CAPParser:
         try:
             root = Xml.fromstring(raw)
         except Xml.ParseError:
-            logging.error('invalid XML schema received')
+            self.app.logger.error('invalid XML schema received')
             return False
 
         # Check the if the namespace matches what is expected of the main broker (CAP v1.2)
         if root.tag != f'{{{self.NS["CAPv1.2"]}}}alert':
-            if logging_strict(f'invalid namespace: {root.tag}'):
+            if logger_strict(f'invalid namespace: {root.tag}'):
                 return False
 
         # Check if all required elements are present

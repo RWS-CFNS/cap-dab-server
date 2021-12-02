@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import threading            # Threading support (for running Flask and DAB Mux/Mod in the background)
-import logging              # Logging facilities
+#import logging              # Logging facilities
 from dialog import Dialog   # Beautiful dialogs using the external program dialog
 
 import sys
@@ -14,7 +14,6 @@ from dab.server import dab_server
 
 # TODO add to command line parameters
 logdir = 'log' # TODO remove trailing slashes from logdir
-logging.basicConfig(filename=f'{logdir}/server.log', level=logging.DEBUG)
 strict = False
 host = '127.0.0.1'
 port = 5000
@@ -27,19 +26,24 @@ d = Dialog(dialog='dialog', autowidgetsize=True)
 
 import subprocess # TODO TEMP, see note below
 def status():
-    # TODO interface with the DABServer class to obtain the mux and mod status
-    # TODO interface with cap CAPServer class to check state of CAP server
-    cap = True
-    mux = subprocess.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode
-    mod = subprocess.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode
+    global cap_thread
+    global dab_thread
 
+    def state(b):
+        if b:
+            return '\Zb\Z2OK\Zn'
+        else:
+            return '\Zb\Z1STOPPED\Zn'
+
+    # TODO interface with the DABServer class to obtain the mux and mod status
     while True:
         code = d.msgbox(f'''
-CAP HTTP server     {'OK' if cap else 'STOPPED'}
-DAB Multiplexer     {'OK' if mux == 0 else 'STOPPED'}
-DAB Modulator       {'OK' if mod == 0 else 'STOPPED'}
+CAP HTTP Server     {state(cap_thread.is_alive())}
+DAB Server Thread   {state(dab_thread.is_alive())}
+DAB Multiplexer     {state(True if subprocess.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0 else False)}
+DAB Modulator       {state(True if subprocess.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0 else False)}
 ''',
-                        title='Server Status', no_collapse=True, ok_label='Refresh', extra_button=True, extra_label='Exit')
+                        title='Server Status', colors=True, no_collapse=True, ok_label='Refresh', extra_button=True, extra_label='Exit')
 
         if code in (Dialog.EXTRA, Dialog.ESC):
             break
@@ -62,9 +66,8 @@ def channel_config():
             break
 
 def logbox(file):
-    #while d.textbox(file, title=file, no_shadow=True, ok_label='Refresh', extra_button=True, extra_label='Exit') not in (Dialog.EXTRA, Dialog.ESC):
     while True:
-        code = d.textbox(file, title=file, no_shadow=True, ok_label='Refresh', extra_button=True, extra_label='Exit', help_button=True, help_label='Purge')
+        code = d.textbox(file, title=file, colors=True, no_shadow=True, ok_label='Refresh', extra_button=True, extra_label='Exit', help_button=True, help_label='Purge')
 
         if code in (Dialog.EXTRA, Dialog.ESC):
             break
@@ -82,7 +85,7 @@ def log():
                           ])
 
         if tag == 'CAP':
-            logbox(f'{logdir}/server.log')
+            logbox(f'{logdir}/capsrv.log')
         elif tag == 'Multiplexer':
             logbox(f'{logdir}/dabmux.log')
         elif tag == 'Modulator':
@@ -107,10 +110,14 @@ def main():
             log()
         elif tag == 'Exit' or code == Dialog.ESC:
             break
+    print('')
 
 if __name__ == '__main__':
+    global cap_thread
+    global dab_thread
+
     # start up CAP and DAB server threads
-    cap_thread = cap_server(host, port, strict)
+    cap_thread = cap_server(logdir, host, port, strict)
     dab_thread = dab_server(logdir, muxcfg, modcfg)
 
     # Make sure dialog switches to alternate screen so it won't leave behind a mess when it's closed
