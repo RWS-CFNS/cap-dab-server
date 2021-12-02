@@ -1,11 +1,13 @@
-from flask import Flask, Response, request  # HTTP server library
+from flask import Flask, Response, request  # Flask HTTP server library
+from werkzeug.serving import make_server    # Flask backend
+import threading                            # Threading support (for running Flask in the background)
 import logging                              # Logging facilities
 import pyexpat                              # CAP XML parser backend (only used for version check)
 from cap.parser import CAPParser            # CAP XML parser (internal)
 from cap.parser import logging_strict       # More logging facilities
 import os                                   # For redirecting Flask's logging output to a file using an env. variable
 
-app = Flask(__name__)   # HTTP server
+app = Flask(__name__)
 cp = None               # CAP XML parser
 
 # Main HTTP POST request handler
@@ -33,7 +35,21 @@ def index():
     xml = cp.generate_response()
     return Response(response=xml, status=200, content_type='application/xml; charset=utf-8')
 
-def cap_server(host, port, debug, strict_parsing):
+class CAPServer(threading.Thread):
+    def __init__(self, app, host, port):
+        threading.Thread.__init__(self)
+
+        self.server = make_server(host, port, app)
+        self.ctx = app.app_context()
+        self.ctx.push()
+
+    def run(self):
+        self.server.serve_forever()
+
+    def join(self):
+        self.server.shutdown()
+
+def cap_server(host, port, strict_parsing):
     global strict
 
     # Check if the version of PyExpat is vulnerable to XML DDoS attacks (version 2.4.1+).
@@ -46,5 +62,7 @@ def cap_server(host, port, debug, strict_parsing):
 
     os.environ['WERKZEUG_RUN_MAIN'] = 'true'
 
-    # start Flask (HTTP server)
-    app.run(host=host, port=port, debug=debug, use_reloader=False)
+    server = CAPServer(app, host, port)
+    server.start()
+
+    return server
