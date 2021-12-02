@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from dialog import Dialog   # Beautiful dialogs using the external program dialog
 import threading            # Threading support (for running Flask and DAB Mux/Mod in the background)
 import logging              # Logging facilities
+from dialog import Dialog   # Beautiful dialogs using the external program dialog
 
 import sys
 import os
@@ -18,13 +18,17 @@ logging.basicConfig(filename=f'{logdir}/server.log', level=logging.DEBUG)
 strict = False
 host = '127.0.0.1'
 port = 5000
+muxcfg = 'cfg/dabmux.cfg'
+modcfg = 'cfg/dabmod.ini'
 # TODO take a textfile with a list of accepted senders as input
+# TODO add config option to purge log on exit
 
 d = Dialog(dialog='dialog', autowidgetsize=True)
 
 import subprocess # TODO TEMP, see note below
 def status():
-    # TODO interface with the dab_server class to obtain the mux and mod status
+    # TODO interface with the DABServer class to obtain the mux and mod status
+    # TODO interface with cap CAPServer class to check state of CAP server
     cap = True
     mux = subprocess.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode
     mod = subprocess.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode
@@ -58,8 +62,6 @@ def channel_config():
             break
 
 def logbox(file):
-    # TODO add button to purge log
-    # TODO add config option to purge log on exit
     #while d.textbox(file, title=file, no_shadow=True, ok_label='Refresh', extra_button=True, extra_label='Exit') not in (Dialog.EXTRA, Dialog.ESC):
     while True:
         code = d.textbox(file, title=file, no_shadow=True, ok_label='Refresh', extra_button=True, extra_label='Exit', help_button=True, help_label='Purge')
@@ -97,8 +99,6 @@ def main():
                           ('Exit',    'Stop the server and exit')
                           ])
 
-        # TODO check exit codes (https://pythondialog.sourceforge.io/doc/Dialog_class_overview.html#return-value-of-widget-producing-methods)
-
         if tag == 'Status':
             status()
         if tag == 'Channels':
@@ -109,23 +109,17 @@ def main():
             break
 
 if __name__ == '__main__':
-    print('Starting up CAP parser HTTPs server...')
+    # start up CAP and DAB server threads
     cap_thread = cap_server(host, port, strict)
-
-    print('Starting up DAB ensemble...')
-    dab = threading.Thread(target=dab_server, args=(logdir,), daemon=True)
-    dab.start()
+    dab_thread = dab_server(logdir, muxcfg, modcfg)
 
     # Make sure dialog switches to alternate screen so it won't leave behind a mess when it's closed
     #d.add_persistent_args(['--keep-tite']) # disabled because it causes flickering
     d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
+    # open the main menu
     main()
 
-    print('Waiting for CAP HTTP server to terminate...')
+    # wait for CAP and DAB server threads to end
     cap_thread.join()
-
-    print('Waiting for DAB server to terminate...')
-    # FIXME pretty crappy way to do things...
-    subprocess.run(('pkill', '-9', 'odr-dabmux'), capture_output=True)
-    subprocess.run(('pkill', '-9', 'odr-dabmod'), capture_output=True)
+    dab_thread.join()
