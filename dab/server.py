@@ -1,4 +1,4 @@
-from dab.odr import ODRServer               # OpenDigitalRadio server support
+from dab.odr import *                     # OpenDigitalRadio server support
 #from dab.fraunhofer import ContentServer # TODO Fraunhofer ContentServer support
 
 class DABServer():
@@ -23,4 +23,6 @@ def dab_server(logdir, muxcfg, modcfg):
     server = ODRServer(logdir, muxcfg, modcfg)
     server.start()
 
-    return server
+    cfg = odr_mux_config(muxcfg)
+
+    return (server, cfg)

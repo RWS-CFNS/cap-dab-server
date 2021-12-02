@@ -1,6 +1,6 @@
-import threading                                    # Threading support (for running Mux and Mod in the background)
-import subprocess as subproc                        # Support for starting subprocesses
-from dab.boost_info_parser import BoostInfoParser   # C++ Boost INFO format parser (used for dabmux.cfg)
+import threading                                                    # Threading support (for running Mux and Mod in the background)
+import subprocess as subproc                                        # Support for starting subprocesses
+from dab.boost_info_parser import BoostInfoTree, BoostInfoParser    # C++ Boost INFO format parser (used for dabmux.cfg)
 
 # OpenDigitalRadio DAB Multiplexer and Modulator support
 class ODRServer(threading.Thread):
@@ -36,7 +36,7 @@ class ODRServer(threading.Thread):
         muxlog.close()
 
     def join(self):
-        if self.mod:
+        if self.mod != None:
             print('Waiting for DAB modulator to terminate... ', end='', flush=True)
             self.mod.terminate()
             if self.mod.poll() is None:
@@ -44,7 +44,7 @@ class ODRServer(threading.Thread):
             else:
                 print('FAIL')
 
-        if self.mux:
+        if self.mux != None:
             print('Waiting for DAB multiplexer to terminate... ', end='', flush=True)
             self.mux.terminate()
             if self.mux.poll() is None:
@@ -52,8 +52,42 @@ class ODRServer(threading.Thread):
             else:
                 print('FAIL')
 
-class ODRMuxConfig():
-    def __init__(self):
-        pass
+def odr_mux_config(cfgfile):
+    p = BoostInfoParser()
 
-#class ODRModConfig():
+    if cfgfile != None:
+        p.read(cfgfile)
+        return p.getRoot()
+
+    # generate a new config file otherwise
+    cfg = BoostInfoTree()
+
+    # load in defaults, refer to:
+    # - https://github.com/Opendigitalradio/ODR-DabMux/blob/master/doc/example.mux
+    # - https://github.com/Opendigitalradio/ODR-DabMux/blob/master/doc/advanced.mux
+
+    cfg.general['dabmode'] = '1'               # DAB Transmission mode (https://en.wikipedia.org/wiki/Digital_Audio_Broadcasting#Bands_and_modes)
+    cfg.general['nbframes'] = '0'              # Don't limit the number of ETI frames generated
+    cfg.general['syslog'] = 'false'
+    cfg.general['tist'] = 'false'              # Disable downloading leap second information
+    cfg.general['managementport'] = '0'        # Disable management port
+
+    # TODO set this randomly at runtime, even when loading file
+    #cfg.remotecontrol['telnetport'] = '10000'
+    #cfg.remotecontrol['zmqendpoint'] = 'tcp://lo:10000'
+
+    cfg.ensemble['id'] = '0x8FFF'               # Default to The Netherlands
+    cfg.ensemble['ecc'] = '0xE3'
+    cfg.ensemble['local-time-offset'] = 'auto'
+    cfg.ensemble['international-table'] = '1'
+    cfg.ensemble['reconfig-counter'] = 'hash'   # Enable FIG 0/7
+    cfg.ensemble['label'] = 'DAB Ensemble'      # Set a generic default name
+    cfg.ensemble['shortlabel'] = 'DAB'
+
+    #root.services
+    #root.subchannels
+    #root.components
+
+    cfg.outputs['stdout'] = 'fifo:///dev/stdout?type=raw'
+
+    return cfg
