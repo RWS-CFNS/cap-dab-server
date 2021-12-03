@@ -18,7 +18,7 @@ import string                       # String utilities (for checking if string i
 logger = logging.getLogger('server')
 logger.setLevel(logging.DEBUG)
 handler = logging.FileHandler('log/server.log') # FIXME don't hardcode
-handler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%y-%m-%d %H:%M'))
+handler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%y-%m-%d %H:%M:%s'))
 handler.setLevel(logging.DEBUG)
 logger.addHandler(handler)
 
@@ -187,13 +187,13 @@ def log():
 
 def main():
     while True:
-        code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', cancel_label='Quit', choices=[
-                          ('Status',  'View the server status'),
-                          ('Ensemble','Configure DAB ensemble') if dab_thread != None else None,
-                          ('Channels','Configure DAB sub-channels'),
-                          ('Logs',    'View the server logs'),
-                          ('Quit',    'Stop the server and quit the admin interface')
-                          ])
+        code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', cancel_label='Quit', choices=
+                          [( 'Status',      'View the server status')] +
+                          ([('Ensemble',    'Configure DAB ensemble')] if dab_thread != None else []) +
+                          ([('Channels',    'Configure DAB sub-channels')] if dab_thread != None else []) +
+                          [( 'Logs',        'View the server logs')] +
+                          [( 'Quit',        'Stop the server and quit the admin interface')]
+                          )
 
         if tag == 'Status':
             status()
@@ -211,7 +211,8 @@ if __name__ == '__main__':
     global dab_thread, dab_cfg
 
     # start up CAP and DAB server threads
-    cap_thread = cap_server(logdir, host, port, strict)
+    #cap_thread = cap_server(logdir, host, port, strict)
+    cap_thread = None
     dab_thread, dab_cfg = dab_server(logdir, muxcfg, modcfg)
 
     d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')

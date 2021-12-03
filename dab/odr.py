@@ -64,6 +64,8 @@ class ODRMuxConfig():
         if cfgfile == None:
             return None
 
+        self.file = cfgfile
+
         # attempt to read the file
         p = BoostInfoParser()
 
@@ -108,45 +110,4 @@ class ODRMuxConfig():
         p = BoostInfoParser()
         p.load(cfg)
 
-
-def odr_mux_config(cfgfile):
-    p = BoostInfoParser()
-
-    if cfgfile != None and os.path.isfile(cfgfile):
-        p.read(cfgfile)
-        return p.getRoot()
-
-    # TODO throw a warning
-
-    # generate a new config file otherwise
-    cfg = BoostInfoTree()
-
-    # load in defaults, refer to:
-    # - https://github.com/Opendigitalradio/ODR-DabMux/blob/master/doc/example.mux
-    # - https://github.com/Opendigitalradio/ODR-DabMux/blob/master/doc/advanced.mux
-
-    cfg.general['dabmode'] = '1'               # DAB Transmission mode (https://en.wikipedia.org/wiki/Digital_Audio_Broadcasting#Bands_and_modes)
-    cfg.general['nbframes'] = '0'              # Don't limit the number of ETI frames generated
-    cfg.general['syslog'] = 'false'
-    cfg.general['tist'] = 'false'              # Disable downloading leap second information
-    cfg.general['managementport'] = '0'        # Disable management port
-
-    # TODO set this randomly at runtime, even when loading file
-    #cfg.remotecontrol['telnetport'] = '10000'
-    #cfg.remotecontrol['zmqendpoint'] = 'tcp://lo:10000'
-
-    cfg.ensemble['id'] = '0x8FFF'               # Default to The Netherlands
-    cfg.ensemble['ecc'] = '0xE3'
-    cfg.ensemble['local-time-offset'] = 'auto'
-    cfg.ensemble['international-table'] = '1'
-    cfg.ensemble['reconfig-counter'] = 'hash'   # Enable FIG 0/7
-    cfg.ensemble['label'] = 'DAB Ensemble'      # Set a generic default name
-    cfg.ensemble['shortlabel'] = 'DAB'
-
-    #root.services
-    #root.subchannels
-    #root.components
-
-    cfg.outputs['stdout'] = 'fifo:///dev/stdout?type=raw'
-
-    return cfg
+        p.write(self.file)

@@ -26,10 +26,8 @@ def dab_server(logdir, muxcfg, modcfg):
     odrmuxcfg = ODRMuxConfig()
     cfg = odrmuxcfg.load(muxcfg)
     if cfg == None:
-        logger.error('Invalid file: {muxcfg}. Unable to start DAB server')
+        logger.error(f'Invalid file: {muxcfg}. Unable to start DAB server')
         return (None, None)
-    else:
-        cfg = odr_mux_config(muxcfg)
 
     server = ODRServer(logdir, muxcfg, modcfg)
     server.start()
