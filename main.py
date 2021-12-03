@@ -6,11 +6,21 @@ import os
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
+import logging                      # Logging facilities
+import logging.handlers             # Logging handlers
 import threading                    # Threading support (for running Flask and DAB Mux/Mod in the background)
 from dialog import Dialog           # Beautiful dialogs using the external program dialog
 from cap.server import cap_server   # CAP server
 from dab.server import dab_server   # DAB server
 import string                       # String utilities (for checking if string is hexadecimal)
+
+# Setup a general server logger
+logger = logging.getLogger('server')
+logger.setLevel(logging.DEBUG)
+handler = logging.FileHandler('log/server.log') # FIXME don't hardcode
+handler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%y-%m-%d %H:%M'))
+handler.setLevel(logging.DEBUG)
+logger.addHandler(handler)
 
 # TODO add to command line parameters
 logdir = 'log' # TODO remove trailing slashes from logdir
@@ -38,8 +48,8 @@ def status():
     # TODO interface with the DABServer class to obtain the mux and mod status
     while True:
         code = d.msgbox(f'''
-CAP HTTP Server     {state(cap_thread.is_alive())}
-DAB Server Thread   {state(dab_thread.is_alive())}
+CAP HTTP Server     {'FAILED' if cap_thread == None else state(cap_thread.is_alive())}
+DAB Server Thread   {'FAILED' if dab_thread == None else state(dab_thread.is_alive())}
 DAB Multiplexer     {state(True if subprocess.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0 else False)}
 DAB Modulator       {state(True if subprocess.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0 else False)}
 ''',                    colors=True, title='Server Status', no_collapse=True,
@@ -157,12 +167,15 @@ def logbox(file):
 def log():
     while True:
         code, tag = d.menu('', title='Server log management', choices=[
+                          ('Server',        'View main server log'),
                           ('CAP',           'View CAP HTTP server log'),
                           ('Multiplexer',   'View DAB Multiplexer log'),
                           ('Modulator',     'View DAB Modulator log'),
                           ('< Return',      'Return to the previous menu'),
                           ])
 
+        if tag == 'Server':
+            logbox(f'{logdir}/server.log')
         if tag == 'CAP':
             logbox(f'{logdir}/capsrv.log')
         elif tag == 'Multiplexer':
@@ -176,7 +189,7 @@ def main():
     while True:
         code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', cancel_label='Quit', choices=[
                           ('Status',  'View the server status'),
-                          ('Ensemble','Configure DAB ensemble'),
+                          ('Ensemble','Configure DAB ensemble') if dab_thread != None else None,
                           ('Channels','Configure DAB sub-channels'),
                           ('Logs',    'View the server logs'),
                           ('Quit',    'Stop the server and quit the admin interface')
@@ -192,7 +205,6 @@ def main():
             log()
         elif tag == 'Quit' or code in (Dialog.CANCEL, Dialog.ESC):
             break
-    print('')
 
 if __name__ == '__main__':
     global cap_thread
@@ -202,11 +214,13 @@ if __name__ == '__main__':
     cap_thread = cap_server(logdir, host, port, strict)
     dab_thread, dab_cfg = dab_server(logdir, muxcfg, modcfg)
 
-    d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS Bastiaan Teeuwen <bastiaan@mkcl.nl>')
+    d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
     # open the main menu
     main()
 
     # wait for CAP and DAB server threads to end
-    cap_thread.join()
-    dab_thread.join()
+    if cap_thread != None:
+        cap_thread.join()
+    if dab_thread != None:
+        dab_thread.join()

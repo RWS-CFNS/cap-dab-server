@@ -1,6 +1,8 @@
 from dab.odr import *                     # OpenDigitalRadio server support
 #from dab.fraunhofer import ContentServer # TODO Fraunhofer ContentServer support
 
+logger = logging.getLogger('server.dab')
+
 class DABServer():
     def __init__(logdir, muxcfg, modcfg):
         self.logdir = logdir
@@ -8,7 +10,7 @@ class DABServer():
         self.modcfg = modcfg
 
     def start():
-        print('Starting up DAB ensemble...')
+        logger.info('Starting up DAB ensemble...')
         server = ODRServer(logdir, muxcfg, modcfg)
         server.start()
 
@@ -19,10 +21,17 @@ class DABServer():
         return True
 
 def dab_server(logdir, muxcfg, modcfg):
-    print('Starting up DAB ensemble...')
+    logger.info('Starting up DAB ensemble...')
+
+    odrmuxcfg = ODRMuxConfig()
+    cfg = odrmuxcfg.load(muxcfg)
+    if cfg == None:
+        logger.error('Invalid file: {muxcfg}. Unable to start DAB server')
+        return (None, None)
+    else:
+        cfg = odr_mux_config(muxcfg)
+
     server = ODRServer(logdir, muxcfg, modcfg)
     server.start()
-
-    cfg = odr_mux_config(muxcfg)
 
     return (server, cfg)

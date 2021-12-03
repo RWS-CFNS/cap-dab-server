@@ -9,6 +9,8 @@ from werkzeug.serving import make_server    # Flask backend
 from cap.parser import CAPParser            # CAP XML parser (internal)
 from cap.parser import logger_strict        # More logging facilities
 
+logger = logging.getLogger('server.cap')
+
 cp = None               # CAP XML parser
 app = Flask(__name__)   # Flask app
 
@@ -73,9 +75,9 @@ class CAPServer(threading.Thread):
         self.server.serve_forever()
 
     def join(self):
-        print('Waiting for CAP HTTP server to terminate... ', end='', flush=True)
+        logger.info('Waiting for CAP HTTP server to terminate...')
         self.server.shutdown()
-        print('OK')
+        logger.info('CAP HTTP server terminated successfully!')
 
 def cap_server(logdir, host, port, strict_parsing):
     global strict
@@ -87,8 +89,6 @@ def cap_server(logdir, host, port, strict_parsing):
     if ver[0] < 2 or ver[1] < 4 or ver[2] < 1:
         raise ModuleNotFoundError('PyExpat 2.4.1+ is required but not found on this system')
 
-    print('Starting up CAP HTTP server...')
-
     # Remove Flask and werkzeug's default logging handler(s).
     for h in app.logger.handlers:
         app.logger.removeHandler(h)
@@ -97,13 +97,17 @@ def cap_server(logdir, host, port, strict_parsing):
 
     # Setup log target
     handler = logging.FileHandler('log/capsrv.log') # FIXME don't hardcode
-    handler.setFormatter(logging.Formatter(fmt='%(asctime)s [%(levelname)s] %(message)s'))
+    handler.setFormatter(logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s', datefmt='%y-%m-%d %H:%M'))
     handler.setLevel(logging.INFO)
     handler.addFilter(strip_esc)
 
     # Setup the logging file for werkzeug and Flask
     app.logger.addHandler(handler)
+    app.logger.setLevel(logging.INFO)
     logging.getLogger('werkzeug').addHandler(handler)
+    logging.getLogger('werkzeug').setLevel(logging.INFO)
+
+    logger.info('Starting up CAP HTTP server...')
 
     # Start the werkzeug/Flask thread
     server = CAPServer(app, host, port)
