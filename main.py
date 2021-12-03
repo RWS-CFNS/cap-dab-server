@@ -9,9 +9,11 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 import logging                      # Logging facilities
 import logging.handlers             # Logging handlers
 import threading                    # Threading support (for running Flask and DAB Mux/Mod in the background)
+import time                         # For sleep support
 from dialog import Dialog           # Beautiful dialogs using the external program dialog
 from cap.server import cap_server   # CAP server
 from dab.server import dab_server   # DAB server
+from dab.odr import ODRMuxConfig    # OpenDigitalRadio server support
 import string                       # String utilities (for checking if string is hexadecimal)
 
 # Setup a general server logger
@@ -65,6 +67,8 @@ Invalid entry!
 ''',         title='Error', colors=True, width=60, height=8)
 
 def ensemble_config():
+    global dab_cfg, dab_thread
+
     def country():
         while True:
             code, elems = d.form('''
@@ -72,8 +76,8 @@ def ensemble_config():
 These values both represent a hexidecimal value.
 \ZbCountry ID\Zn must be padded with 0xFFF.
 '''                              , colors=True, title='Country - Ensemble Configuration', elements=[
-                ('Country ID',  1, 1, dab_cfg.ensemble['id'][2:], 1, 20, 5, 4),
-                ('ECC',         2, 1, dab_cfg.ensemble['ecc'][2:], 2, 20, 3, 2),
+                ('Country ID',  1, 1, dab_cfg.cfg.ensemble['id'][2:], 1, 20, 5, 4),
+                ('ECC',         2, 1, dab_cfg.cfg.ensemble['ecc'][2:], 2, 20, 3, 2),
                 ])
 
             if code == Dialog.OK:
@@ -87,8 +91,8 @@ These values both represent a hexidecimal value.
                     error('Invalid length.\n\ZbCountry ID\Zn must be 4 digits and \ZbECC\Zn 2 digits in length.')
                     continue
 
-                dab_cfg.ensemble['id'] = f'0x{elems[0]}'
-                dab_cfg.ensemble['ecc'] = f'0x{elems[1]}'
+                dab_cfg.cfg.ensemble['id'] = f'0x{elems[0]}'
+                dab_cfg.cfg.ensemble['ecc'] = f'0x{elems[1]}'
 
             break
 
@@ -98,8 +102,8 @@ These values both represent a hexidecimal value.
 \ZbLabel\Zn cannot be longer than 16 characters.
 \ZbShort Label\Zn cannot be longer than 8 characters and must contain characters from \ZbLabel\Zn.
 ''',                             colors=True, title='Label - Ensemble Configuration', elements=[
-                ('Label',       1, 1, dab_cfg.ensemble['label'], 1, 20, 17, 16),
-                ('Short Label', 2, 1, dab_cfg.ensemble['shortlabel'], 2, 20, 9, 8)
+                ('Label',       1, 1, dab_cfg.cfg.ensemble['label'], 1, 20, 17, 16),
+                ('Short Label', 2, 1, dab_cfg.cfg.ensemble['shortlabel'], 2, 20, 9, 8)
                 ])
 
             # TODO check if label contains characters from short label
@@ -107,8 +111,8 @@ These values both represent a hexidecimal value.
             if code == Dialog.OK:
                 # check if the shortlabel has characters from label
                 if all(c in elems[0] for c in elems[1]):
-                    dab_cfg.ensemble['label'] = elems[0]
-                    dab_cfg.ensemble['shortlabel'] = elems[1]
+                    dab_cfg.cfg.ensemble['label'] = elems[0]
+                    dab_cfg.cfg.ensemble['shortlabel'] = elems[1]
                 else:
                     error('\ZbShort Label\Zn must contain characters from \ZbLabel\Zn.')
                     continue
@@ -121,10 +125,10 @@ These values both represent a hexidecimal value.
 
     while True:
         code, tag = d.menu('', title='Ensemble Configuration', choices=[
-                          ('Country',       'Change the DAB Country ID and ECC'),
-                          ('Label',         'Change the ensemble label'),
-                          ('Announcements', 'Add/Remove/Modify ensemble announcements (FIG 0/19)'),
-                          ('< Return',      'Return to the previous menu')
+                          ('Country',           'Change the DAB Country ID and ECC'),
+                          ('Label',             'Change the ensemble label'),
+                          ('Announcements',     'Add/Remove/Modify ensemble announcements (FIG 0/19)'),
+                          ('< Save & Return',   'Return to the previous menu and save modified changes')
                           ])
 
         if tag == 'Country':
@@ -133,8 +137,19 @@ These values both represent a hexidecimal value.
             label()
         elif tag == 'Announcements':
             announcements()
-        elif tag == '< Return' or code in (Dialog.CANCEL, Dialog.ESC):
-            # TODO reload the DAB server upon exiting this menu
+        elif tag == '< Save & Return' or code in (Dialog.CANCEL, Dialog.ESC):
+            # TODO check if any actual changes have been made
+
+            # save changes and reload the DAB server
+            print('\nSaving changes, one moment please...')
+            logger.info('Restarting DAB server, one moment please...')
+            dab_cfg.write()
+            dab_thread.join()
+
+            # give sockets some time to unbind before starting back up
+            time.sleep(4)
+            dab_thread, dab_cfg = dab_server(logdir, muxcfg, modcfg)
+
             break
 
 def channel_config():
@@ -211,8 +226,7 @@ if __name__ == '__main__':
     global dab_thread, dab_cfg
 
     # start up CAP and DAB server threads
-    #cap_thread = cap_server(logdir, host, port, strict)
-    cap_thread = None
+    cap_thread = cap_server(logdir, host, port, strict)
     dab_thread, dab_cfg = dab_server(logdir, muxcfg, modcfg)
 
     d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')

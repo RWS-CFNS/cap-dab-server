@@ -23,9 +23,8 @@ class DABServer():
 def dab_server(logdir, muxcfg, modcfg):
     logger.info('Starting up DAB ensemble...')
 
-    odrmuxcfg = ODRMuxConfig()
-    cfg = odrmuxcfg.load(muxcfg)
-    if cfg == None:
+    cfg = ODRMuxConfig()
+    if cfg.load(muxcfg) == None:
         logger.error(f'Invalid file: {muxcfg}. Unable to start DAB server')
         return (None, None)
 

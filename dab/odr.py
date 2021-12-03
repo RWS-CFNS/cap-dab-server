@@ -58,7 +58,7 @@ class ODRServer(threading.Thread):
 
 class ODRMuxConfig():
     def __init__(self):
-        pass
+        self.p = BoostInfoParser()
 
     def load(self, cfgfile):
         if cfgfile == None:
@@ -67,47 +67,43 @@ class ODRMuxConfig():
         self.file = cfgfile
 
         # attempt to read the file
-        p = BoostInfoParser()
-
         if cfgfile != None and os.path.isfile(cfgfile):
-            p.read(cfgfile)
-            return p.getRoot()
+            self.p.read(cfgfile)
+            self.cfg = self.p.getRoot()
+            return self.cfg
 
         # generate a new config file otherwise
-        cfg = BoostInfoTree()
+        self.cfg = BoostInfoTree()
 
         # load in defaults, refer to:
         # - https://github.com/Opendigitalradio/ODR-DabMux/blob/master/doc/example.mux
         # - https://github.com/Opendigitalradio/ODR-DabMux/blob/master/doc/advanced.mux
 
-        cfg.general['dabmode'] = '1'               # DAB Transmission mode (https://en.wikipedia.org/wiki/Digital_Audio_Broadcasting#Bands_and_modes)
-        cfg.general['nbframes'] = '0'              # Don't limit the number of ETI frames generated
-        cfg.general['syslog'] = 'false'
-        cfg.general['tist'] = 'false'              # Disable downloading leap second information
-        cfg.general['managementport'] = '0'        # Disable management port
+        self.cfg.general['dabmode'] = '1'               # DAB Transmission mode (https://en.wikipedia.org/wiki/Digital_Audio_Broadcasting#Bands_and_modes)
+        self.cfg.general['nbframes'] = '0'              # Don't limit the number of ETI frames generated
+        self.cfg.general['syslog'] = 'false'
+        self.cfg.general['tist'] = 'false'              # Disable downloading leap second information
+        self.cfg.general['managementport'] = '0'        # Disable management port
 
         # TODO set this randomly at runtime, even when loading file
         #cfg.remotecontrol['telnetport'] = '10000'
         #cfg.remotecontrol['zmqendpoint'] = 'tcp://lo:10000'
 
-        cfg.ensemble['id'] = '0x8FFF'               # Default to The Netherlands
-        cfg.ensemble['ecc'] = '0xE3'
-        cfg.ensemble['local-time-offset'] = 'auto'
-        cfg.ensemble['international-table'] = '1'
-        cfg.ensemble['reconfig-counter'] = 'hash'   # Enable FIG 0/7
-        cfg.ensemble['label'] = 'DAB Ensemble'      # Set a generic default name
-        cfg.ensemble['shortlabel'] = 'DAB'
+        self.cfg.ensemble['id'] = '0x8FFF'               # Default to The Netherlands
+        self.cfg.ensemble['ecc'] = '0xE3'
+        self.cfg.ensemble['local-time-offset'] = 'auto'
+        self.cfg.ensemble['international-table'] = '1'
+        self.cfg.ensemble['reconfig-counter'] = 'hash'   # Enable FIG 0/7
+        self.cfg.ensemble['label'] = 'DAB Ensemble'      # Set a generic default name
+        self.cfg.ensemble['shortlabel'] = 'DAB'
 
         #root.services
         #root.subchannels
         #root.components
 
-        cfg.outputs['stdout'] = 'fifo:///dev/stdout?type=raw'
+        self.cfg.outputs['stdout'] = 'fifo:///dev/stdout?type=raw'
 
-        return cfg
+        return self.cfg
 
-    def write(self, cfg):
-        p = BoostInfoParser()
-        p.load(cfg)
-
-        p.write(self.file)
+    def write(self):
+        self.p.write(self.file)
