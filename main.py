@@ -10,6 +10,7 @@ import threading                    # Threading support (for running Flask and D
 from dialog import Dialog           # Beautiful dialogs using the external program dialog
 from cap.server import cap_server   # CAP server
 from dab.server import dab_server   # DAB server
+import string                       # String utilities (for checking if string is hexadecimal)
 
 # TODO add to command line parameters
 logdir = 'log' # TODO remove trailing slashes from logdir
@@ -41,33 +42,52 @@ CAP HTTP Server     {state(cap_thread.is_alive())}
 DAB Server Thread   {state(dab_thread.is_alive())}
 DAB Multiplexer     {state(True if subprocess.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0 else False)}
 DAB Modulator       {state(True if subprocess.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0 else False)}
-''',                    title='Server Status', colors=True, no_collapse=True,
+''',                    colors=True, title='Server Status', no_collapse=True,
                         ok_label='Refresh', extra_button=True, extra_label='Exit')
 
         if code in (Dialog.EXTRA, Dialog.ESC):
             break
 
+def error(msg=''):
+    d.msgbox(f'''
+Invalid entry!
+{msg}
+''',         title='Error', colors=True, width=60, height=8)
+
 def ensemble_config():
     def country():
         while True:
-            code, elems = d.form('', title='Country - Ensemble Configuration', elements=[
+            code, elems = d.form('''
+\ZbCountry ID\Zn and \ZbECC\Zn are found in section 5.4 Country Id of ETSI TS 101 756.
+These values both represent a hexidecimal value.
+\ZbCountry ID\Zn must be padded with 0xFFF.
+'''                              , colors=True, title='Country - Ensemble Configuration', elements=[
                 ('Country ID',  1, 1, dab_cfg.ensemble['id'][2:], 1, 20, 5, 4),
                 ('ECC',         2, 1, dab_cfg.ensemble['ecc'][2:], 2, 20, 3, 2),
                 ])
 
-            # TODO check if country ID is valid
-
             if code == Dialog.OK:
-                pass
-            elif code in (Dialog.CANCEL, Dialog.ESC):
-                break
+                # check if the IDs are valid hexadecimal numbers
+                if not all(c in string.hexdigits for c in elems[0]) or not all(c in string.hexdigits for c in elems[1]):
+                    error('Invalid hexadecimal number.')
+                    continue
+
+                # check the length of the IDs
+                if len(elems[0]) != 4 or len(elems[1]) != 2:
+                    error('Invalid length.\n\ZbCountry ID\Zn must be 4 digits and \ZbECC\Zn 2 digits in length.')
+                    continue
+
+                dab_cfg.ensemble['id'] = f'0x{elems[0]}'
+                dab_cfg.ensemble['ecc'] = f'0x{elems[1]}'
+
+            break
 
     def label():
         while True:
             code, elems = d.form('''
 \ZbLabel\Zn cannot be longer than 16 characters.
-\ZbShort Label\Zn cannot be longer than 8 characters and must contain characters from Label.
-            ''', colors=True, title='Label - Ensemble Configuration', elements=[
+\ZbShort Label\Zn cannot be longer than 8 characters and must contain characters from \ZbLabel\Zn.
+''',                             colors=True, title='Label - Ensemble Configuration', elements=[
                 ('Label',       1, 1, dab_cfg.ensemble['label'], 1, 20, 17, 16),
                 ('Short Label', 2, 1, dab_cfg.ensemble['shortlabel'], 2, 20, 9, 8)
                 ])
@@ -75,18 +95,25 @@ def ensemble_config():
             # TODO check if label contains characters from short label
 
             if code == Dialog.OK:
-                pass
-            elif code in (Dialog.CANCEL, Dialog.ESC):
-                break
+                # check if the shortlabel has characters from label
+                if all(c in elems[0] for c in elems[1]):
+                    dab_cfg.ensemble['label'] = elems[0]
+                    dab_cfg.ensemble['shortlabel'] = elems[1]
+                else:
+                    error('\ZbShort Label\Zn must contain characters from \ZbLabel\Zn.')
+                    continue
+
+            break
 
     def announcements():
+        # TODO implement
         pass
 
     while True:
         code, tag = d.menu('', title='Ensemble Configuration', choices=[
                           ('Country',       'Change the DAB Country ID and ECC'),
                           ('Label',         'Change the ensemble label'),
-                          ('Announcements', 'Change the ensemble announcements (FIG 0/19)'),
+                          ('Announcements', 'Add/Remove/Modify ensemble announcements (FIG 0/19)'),
                           ('< Return',      'Return to the previous menu')
                           ])
 
@@ -97,6 +124,7 @@ def ensemble_config():
         elif tag == 'Announcements':
             announcements()
         elif tag == '< Return' or code in (Dialog.CANCEL, Dialog.ESC):
+            # TODO reload the DAB server upon exiting this menu
             break
 
 def channel_config():
