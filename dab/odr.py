@@ -16,6 +16,7 @@ class ODRServer(threading.Thread):
         self.modcfg = modcfg
 
     def run(self):
+        # TODO rotate this log, this is not so straightforward it appears
         muxlog = open(f'{self.logdir}/dabmux.log', 'ab')
         modlog = open(f'{self.logdir}/dabmod.log', 'ab')
 

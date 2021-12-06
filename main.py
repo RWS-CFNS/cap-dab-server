@@ -6,6 +6,7 @@ import os
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
+import configparser                 # Python INI file parser
 import logging                      # Logging facilities
 import logging.handlers             # Logging handlers
 import threading                    # Threading support (for running Flask and DAB Mux/Mod in the background)
@@ -16,31 +17,64 @@ from dab.server import dab_server   # DAB server
 from dab.odr import ODRMuxConfig    # OpenDigitalRadio server support
 import string                       # String utilities (for checking if string is hexadecimal)
 
+# Max path length from limits.h
+MAX_PATH = os.pathconf('/', 'PC_PATH_MAX')
+
+# Config file path home
+try:
+    CONFIG_HOME = f'{os.environ["XDG_CONFIG_HOME"]}'
+except KeyError:
+    CONFIG_HOME = f'{os.path.expanduser("~")}/.config'
+
+# Cache file home
+try:
+    CACHE_HOME = f'{os.environ["XDG_CACHE_HOME"]}'
+except KeyError:
+    CACHE_HOME = f'{os.path.expanduser("~")}/.cache'
+
+# Setup the main server config file
+server_config = f'{CONFIG_HOME}/cap-dab-server/server.ini'
+os.makedirs(os.path.dirname(server_config), exist_ok=True)
+config = configparser.ConfigParser()
+if os.path.isfile(server_config):
+    config.read(server_config)
+else:
+    config['general'] = {
+                         'logdir': f'{CACHE_HOME}/cap-dab-server/',
+                         'max_log_size': '8192'
+                        }
+    config['dab'] = {
+                         'odrbin_path': f'{sys.path[0]}/bin/',
+                         'mux_config': f'{CONFIG_HOME}/cap-dab-server/dabmux.mux',
+                         'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini'
+                        }
+    config['cap'] = {
+                         'strict_parsing': 'no',
+                         'host': '127.0.0.1',
+                         'port': '5689'
+                        }
+
+    with open(server_config, 'w') as config_file:
+        config.write(config_file)
+
+# Create directories if they didn't exist yet
+os.makedirs(os.path.dirname(config['general']['logdir']), exist_ok=True)
+os.makedirs(os.path.dirname(config['dab']['odrbin_path']), exist_ok=True)
+os.makedirs(os.path.dirname(config['dab']['mux_config']), exist_ok=True)
+os.makedirs(os.path.dirname(config['dab']['mod_config']), exist_ok=True)
+
 # Setup a general server logger
 logger = logging.getLogger('server')
 logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler('log/server.log') # FIXME don't hardcode
+handler = logging.handlers.RotatingFileHandler(f'{config["general"]["logdir"]}/server.log', mode='a', maxBytes=int(config['general']['max_log_size'])*1024, backupCount=5)
 handler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%y-%m-%d %H:%M:%s'))
 handler.setLevel(logging.DEBUG)
 logger.addHandler(handler)
-
-# TODO add to command line parameters
-logdir = 'log' # TODO remove trailing slashes from logdir
-strict = False
-host = '127.0.0.1'
-port = 5000
-muxcfg = 'cfg/dabmux.cfg'
-modcfg = 'cfg/dabmod.ini'
-# TODO take a textfile with a list of accepted senders as input
-# TODO add config option to purge log on exit
 
 d = Dialog(dialog='dialog', autowidgetsize=True)
 
 import subprocess # TODO TEMP, see note below
 def status():
-    global cap_thread
-    global dab_thread
-
     def state(b):
         if b:
             return '\Zb\Z2OK\Zn'
@@ -67,7 +101,7 @@ Invalid entry!
 ''',         title='Error', colors=True, width=60, height=8)
 
 def ensemble_config():
-    global dab_cfg, dab_thread
+    global dab_thread, dab_cfg
 
     def country():
         while True:
@@ -105,8 +139,6 @@ These values both represent a hexidecimal value.
                 ('Label',       1, 1, dab_cfg.cfg.ensemble['label'], 1, 20, 17, 16),
                 ('Short Label', 2, 1, dab_cfg.cfg.ensemble['shortlabel'], 2, 20, 9, 8)
                 ])
-
-            # TODO check if label contains characters from short label
 
             if code == Dialog.OK:
                 # check if the shortlabel has characters from label
@@ -148,7 +180,7 @@ These values both represent a hexidecimal value.
 
             # give sockets some time to unbind before starting back up
             time.sleep(4)
-            dab_thread, dab_cfg = dab_server(logdir, muxcfg, modcfg)
+            dab_thread, dab_cfg = dab_server(config)
 
             break
 
@@ -168,6 +200,44 @@ def channel_config():
             pass
         elif tag == '< Return' or code in (Dialog.CANCEL, Dialog.ESC):
             break
+
+def settings():
+    while True:
+        code, elems = d.mixedform('''
+'''                              , title='Country - Ensemble Configuration', colors=True, ok_label='Save', item_help=True, help_tags=True, elements=[
+            ('Server config',       1, 1, server_config, 1, 20, 64, MAX_PATH, 2, 'server.ini config file path'),
+            ('Log directory',       2, 1, config['general']['logdir'], 2, 20, 64, MAX_PATH, 0, 'Directory to write log files to'),
+            ('Max log size',        3, 1, config['general']['max_log_size'], 3, 20, 8, 7, 0, 'Maximum size per log file in Kb'),
+            ('ODR binaries path',   4, 1, config['dab']['odrbin_path'], 4, 20, 64, MAX_PATH, 0, 'Directory containing ODR-DabMux, ODR-DabMod, ODR-PadEnc and ODR-AudioEnc'),
+            ('ODR-DabMux config',   5, 1, config['dab']['mux_config'], 5, 20, 64, MAX_PATH, 0, 'dabmux.mux config file path'),
+            ('ODR-DabMod config',   6, 1, config['dab']['mod_config'], 6, 20, 64, MAX_PATH, 0, 'dabmod.ini config file path'),
+            ('Strict CAP parsing',  7, 1, config['cap']['strict_parsing'], 7, 20, 4, 3, 0, 'Enforce strict CAP XML parsing (yes/no)'),
+            ('CAP server host',     8, 1, config['cap']['host'], 8, 20, 46, 45, 0, 'IP address to host CAP HTTP server on (IPv4/IPv6)'),
+            ('CAP server port',     9, 1, config['cap']['port'], 9, 20, 6, 5, 0, 'Port to host CAP HTTP server on')
+            ])
+
+        if code == Dialog.OK:
+            # Save the changes
+            config['general'] = {
+                                'logdir': elems[1],
+                                'max_log_size': elems[2]
+                                }
+            config['dab'] = {
+                                'odrbin_path': elems[3],
+                                'mux_config': elems[4],
+                                'mod_config': elems[5]
+                                }
+            config['cap'] = {
+                                'strict_parsing': elems[6],
+                                'host': elems[7],
+                                'port': elems[8]
+                                }
+            with open(server_config, 'w') as config_file:
+                config.write(config_file)
+
+            # TODO restart server if necessary
+
+        break
 
 def logbox(file):
     while True:
@@ -189,6 +259,8 @@ def log():
                           ('< Return',      'Return to the previous menu'),
                           ])
 
+        logdir = config['general']['logdir']
+
         if tag == 'Server':
             logbox(f'{logdir}/server.log')
         if tag == 'CAP':
@@ -206,6 +278,7 @@ def main():
                           [( 'Status',      'View the server status')] +
                           ([('Ensemble',    'Configure DAB ensemble')] if dab_thread != None else []) +
                           ([('Channels',    'Configure DAB sub-channels')] if dab_thread != None else []) +
+                          [( 'Settings',    'Configure general server settings')] +
                           [( 'Logs',        'View the server logs')] +
                           [( 'Quit',        'Stop the server and quit the admin interface')]
                           )
@@ -216,6 +289,8 @@ def main():
             ensemble_config()
         elif tag == 'Channels':
             channel_config()
+        elif tag == 'Settings':
+            settings()
         elif tag == 'Logs':
             log()
         elif tag == 'Quit' or code in (Dialog.CANCEL, Dialog.ESC):
@@ -226,8 +301,8 @@ if __name__ == '__main__':
     global dab_thread, dab_cfg
 
     # start up CAP and DAB server threads
-    cap_thread = cap_server(logdir, host, port, strict)
-    dab_thread, dab_cfg = dab_server(logdir, muxcfg, modcfg)
+    cap_thread = cap_server(config)
+    dab_thread, dab_cfg = dab_server(config)
 
     d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 

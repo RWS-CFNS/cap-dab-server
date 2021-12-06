@@ -14,6 +14,8 @@ logger = logging.getLogger('server.cap')
 cp = None               # CAP XML parser
 app = Flask(__name__)   # Flask app
 
+# TODO take a textfile with a list of accepted senders as input
+
 # Werkzeug adds colors to the log file by default.
 # Unfortunately, dialog can't display this, so this has to be filtered out.
 class StripEsc(logging.Filter):
@@ -79,9 +81,9 @@ class CAPServer(threading.Thread):
         self.server.shutdown()
         logger.info('CAP HTTP server terminated successfully!')
 
-def cap_server(logdir, host, port, strict_parsing):
+def cap_server(config):
     global strict
-    strict = strict_parsing
+    strict = bool(config['cap']['strict_parsing'])
 
     # Check if the version of PyExpat is vulnerable to XML DDoS attacks (version 2.4.1+).
     # See https://docs.python.org/3/library/xml.html#xml-vulnerabilitiesk
@@ -96,7 +98,7 @@ def cap_server(logdir, host, port, strict_parsing):
         app.logger.removeHandler(h)
 
     # Setup log target
-    handler = logging.FileHandler('log/capsrv.log') # FIXME don't hardcode
+    handler = logging.handlers.RotatingFileHandler(f'{config["general"]["logdir"]}/capsrv.log', mode='a', maxBytes=int(config['general']['max_log_size'])*1024, backupCount=5)
     handler.setFormatter(logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s', datefmt='%y-%m-%d %H:%M'))
     handler.setLevel(logging.INFO)
     handler.addFilter(strip_esc)
@@ -110,7 +112,7 @@ def cap_server(logdir, host, port, strict_parsing):
     logger.info('Starting up CAP HTTP server...')
 
     # Start the werkzeug/Flask thread
-    server = CAPServer(app, host, port)
+    server = CAPServer(app, config['cap']['host'], int(config['cap']['port']))
     server.start()
 
     return server
