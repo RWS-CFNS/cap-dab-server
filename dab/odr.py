@@ -59,8 +59,9 @@ class ODRServer(threading.Thread):
                 logger.error('Terminating DAB multiplexer failed. Attempt quitting manually.')
 
 class ODRMuxConfig():
-    def __init__(self):
+    def __init__(self, telnetport):
         self.p = BoostInfoParser()
+        self.telnetport = telnetport
 
     def load(self, cfgfile):
         if cfgfile == None:
@@ -72,6 +73,10 @@ class ODRMuxConfig():
         if cfgfile != None and os.path.isfile(cfgfile):
             self.p.read(cfgfile)
             self.cfg = self.p.getRoot()
+
+            # overwrite the default telnetport with the port specified in the server settings file
+            self.cfg.remotecontrol['telnetport'] = str(self.telnetport)
+
             return True
 
         logger.warning(f'Unable to read {cfgfile}, creating a new config file')
@@ -89,9 +94,7 @@ class ODRMuxConfig():
         self.cfg.general['tist'] = 'false'              # Disable downloading leap second information
         self.cfg.general['managementport'] = '0'        # Disable management port
 
-        # TODO set this randomly at runtime, even when loading file
-        #cfg.remotecontrol['telnetport'] = '10000'
-        #cfg.remotecontrol['zmqendpoint'] = 'tcp://lo:10000'
+        self.cfg.remotecontrol['telnetport'] = str(self.telnetport)
 
         self.cfg.ensemble['id'] = '0x8FFF'               # Default to The Netherlands
         self.cfg.ensemble['ecc'] = '0xE3'
@@ -102,9 +105,37 @@ class ODRMuxConfig():
         self.cfg.ensemble['shortlabel'] = 'DAB'
 
         #root.services
-        #root.subchannels
-        #root.components
+        # Create a default Pseudo alarm announcement subchannel
+        #  This sub-channel is an integral part of the PoC and aims to support warning messages on devices that don't
+        #  support DAB-EWF or even the DAB Alarm Announcement.
+        self.cfg.ensemble.announcements.alarm['cluster']
+        self.cfg.ensemble.announcements.alarm.flags['Alarm'] = 'true'
+        self.cfg.ensemble.announcements.alarm['subchannel'] = 'sub-alarm'
 
+        root.services['srv-alarm']['id'] = '0x8AAA'
+        root.services['srv-alarm']['label'] = 'Alarm announcement'
+        root.services['srv-alarm']['shortlabel'] = 'Alarm'
+        root.services['srv-alarm']['pty'] = '3'
+        root.services['srv-alarm']['pty-sd'] = 'static'
+        root.services['srv-alarm']['announcements']['Alarm'] = 'true'
+        root.services['srv-alarm']['announcements']['clusters'] = '1'
+
+        root.subchannels['sub-alarm']['type'] = 'dabplus'
+        root.subchannels['sub-alarm']['bitrate'] = '96'
+        root.subchannels['sub-alarm']['id'] = '1'
+        root.subchannels['sub-alarm']['protection-profile'] = 'EEP_A'
+        root.subchannels['sub-alarm']['protection'] = '3'
+        root.subchannels['sub-alarm']['inputproto'] = 'zmq'
+        root.subchannels['sub-alarm']['inputuri'] = 'tcp://*:39801'
+        root.subchannels['sub-alarm']['zmq-buffer'] = '40'
+        root.subchannels['sub-alarm']['zmq-prebuffering'] = '20'
+
+        root.components['comp-alarm']['type'] = '2'                                 # Type 2 = multi-channel
+        root.components['comp-alarm']['service'] = 'srv-alarm'
+        root.components['comp-alarm']['subchannel'] = 'sub-alarm'
+        root.components['comp-alarm']['user-applications']['userapp'] = 'slideshow' # Enable MOT slideshow
+
+        # Output to stdout because we'll be piping the output into ODR-DabMux
         self.cfg.outputs['stdout'] = 'fifo:///dev/stdout?type=raw'
 
         self.p.load(self.cfg)

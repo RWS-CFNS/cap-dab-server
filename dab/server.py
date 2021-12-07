@@ -23,7 +23,7 @@ class DABServer():
 def dab_server(config):
     logger.info('Starting up DAB ensemble...')
 
-    cfg = ODRMuxConfig()
+    cfg = ODRMuxConfig(config['dab']['telnetport'])
     if not cfg.load(config['dab']['mux_config']):
         logger.error(f'Invalid file: {muxcfg}. Unable to start DAB server')
         return (None, None)

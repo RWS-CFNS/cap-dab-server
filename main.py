@@ -46,12 +46,13 @@ else:
     config['dab'] = {
                          'odrbin_path': f'{sys.path[0]}/bin',
                          'mux_config': f'{CONFIG_HOME}/cap-dab-server/dabmux.mux',
-                         'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini'
+                         'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini',
+                         'telnetport': '39899'
                         }
     config['cap'] = {
                          'strict_parsing': 'no',
                          'host': '127.0.0.1',
-                         'port': '5689'
+                         'port': '39800'
                         }
 
     with open(server_config, 'w') as config_file:
@@ -216,10 +217,10 @@ def ensemble_config():
         elif tag == 'Announcements':
             announcements()
 
-def channel_config():
-    TITLE = 'DAB Sub-Channel Configuration'
+def services_config():
+    TITLE = 'DAB Service Configuration'
 
-    def subch():
+    def services():
         def modify(channel):
             # TODO check if required fields have been entered (label and ID)
 
@@ -234,15 +235,17 @@ def channel_config():
                 if code in (Dialog.CANCEL, Dialog.ESC):
                     break
                 elif code == Dialog.EXTRA:
-                    yncode = d.yesno(f'Are you sure you want to delete the sub-channel {channel}?', width=60, height=6)
+                    yncode = d.yesno(f'Are you sure you want to delete the service {channel}?', width=60, height=6)
                     if yncode == Dialog.OK:
                         del dab_cfg.cfg.services[channel]
                         break
                 elif tag == 'Service ID':
-                    cid, ecc = country_config(TITLE, dab_cfg.cfg.services[channel]['id'], dab_cfg.cfg.services[channel]['ecc'])
+                    sid, ecc = country_config(TITLE, dab_cfg.cfg.services[channel]['id'], dab_cfg.cfg.services[channel]['ecc'])
 
-                    if cid != None:
-                        dab_cfg.cfg.services[channel]['id'] = cid
+                    # TODO check if Service ID is already in use
+
+                    if sid != None:
+                        dab_cfg.cfg.services[channel]['id'] = sid
 
                     if ecc != None:
                         dab_cfg.cfg.services[channel]['ecc'] = ecc
@@ -266,7 +269,7 @@ def channel_config():
 
         def add():
             while True:
-                code, string = d.inputbox('Please enter a new identifier/name for this sub-channel (no spaces)')
+                code, string = d.inputbox('Please enter a new identifier/name for this service (no spaces)')
                 if ' ' in string:
                     error('String cannot contain spaces.')
                 else:
@@ -276,16 +279,16 @@ def channel_config():
 
         while True:
             menu = [
-                   ('Add',      'Add a new subchannel')
+                   ('Add',      'Add a new service')
                    ]
 
-            # Load in subchannels from multiplexer config
+            # Load in services from multiplexer config
             i = 0
             for key, value in dab_cfg.cfg.services:
                 menu.insert(i, (key, dab_cfg.cfg.services[key]['label']))
                 i += 1
 
-            code, tag = d.menu('Please select a subchannel', title=TITLE, cancel_label='Back', choices=menu)
+            code, tag = d.menu('Please select a service', title=TITLE, cancel_label='Back', choices=menu)
 
             if code in (Dialog.CANCEL, Dialog.ESC):
                 break
@@ -305,9 +308,10 @@ def channel_config():
 
     while True:
         code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
-                          ('List',              'Add/Modify sub-channels'),
-                          ('Streams',           'Add/Modify/Set the sub-channel stream source'),
-                          ('Announcements',     'Manually trigger announcements on a sub-channel')
+                          ('Services',          'Add/Modify services'),
+                          ('Subchannels',       'Add/Modify subchannels'),
+                          ('Streams',           'Add/Modify/Set the service stream source'),
+                          ('Announcements',     'Manually trigger announcements on a service')
                           ])
 
         if code == Dialog.EXTRA:
@@ -317,8 +321,10 @@ def channel_config():
             # restore the old config
             dab_cfg.restore()
             break
-        elif tag == 'List':
-            subch()
+        elif tag == 'Services':
+            services()
+        elif tag == 'Subchannels':
+            services()
         elif tag == 'Streams':
             streams()
         elif tag == 'Announcements':
@@ -328,15 +334,26 @@ def settings():
     while True:
         code, elems = d.mixedform('''
 '''                              , title='Country - Ensemble Configuration', colors=True, ok_label='Save', item_help=True, help_tags=True, elements=[
-            ('Server config',       1, 1, server_config, 1, 20, 64, MAX_PATH, 2, 'server.ini config file path'),
-            ('Log directory',       2, 1, config['general']['logdir'], 2, 20, 64, MAX_PATH, 0, 'Directory to write log files to'),
-            ('Max log size',        3, 1, config['general']['max_log_size'], 3, 20, 8, 7, 0, 'Maximum size per log file in Kb'),
-            ('ODR binaries path',   4, 1, config['dab']['odrbin_path'], 4, 20, 64, MAX_PATH, 0, 'Directory containing ODR-DabMux, ODR-DabMod, ODR-PadEnc and ODR-AudioEnc'),
-            ('ODR-DabMux config',   5, 1, config['dab']['mux_config'], 5, 20, 64, MAX_PATH, 0, 'dabmux.mux config file path'),
-            ('ODR-DabMod config',   6, 1, config['dab']['mod_config'], 6, 20, 64, MAX_PATH, 0, 'dabmod.ini config file path'),
-            ('Strict CAP parsing',  7, 1, config['cap']['strict_parsing'], 7, 20, 4, 3, 0, 'Enforce strict CAP XML parsing (yes/no)'),
-            ('CAP server host',     8, 1, config['cap']['host'], 8, 20, 46, 45, 0, 'IP address to host CAP HTTP server on (IPv4/IPv6)'),
-            ('CAP server port',     9, 1, config['cap']['port'], 9, 20, 6, 5, 0, 'Port to host CAP HTTP server on')
+            ('Server config',       1,  1, server_config,                     1,  20, 64, MAX_PATH, 2,
+             'server.ini config file path'),
+            ('Log directory',       2,  1, config['general']['logdir'],       2,  20, 64, MAX_PATH, 0,
+             'Directory to write log files to'),
+            ('Max log size',        3,  1, config['general']['max_log_size'], 3,  20, 8,  7,        0,
+             'Maximum size per log file in Kb'),
+            ('ODR binaries path',   4,  1, config['dab']['odrbin_path'],      4,  20, 64, MAX_PATH, 0,
+             'Directory containing ODR-DabMux, ODR-DabMod, ODR-PadEnc and ODR-AudioEnc'),
+            ('ODR-DabMux config',   5,  1, config['dab']['mux_config'],       5,  20, 64, MAX_PATH, 0,
+             'dabmux.mux config file path'),
+            ('ODR-DabMod config',   6,  1, config['dab']['mod_config'],       6,  20, 64, MAX_PATH, 0,
+             'dabmod.ini config file path'),
+            ('DAB telnetport',      7,  1, config['dab']['telnetport'],       7,  20, 6,  5,        0,
+             'Internally used DabMux telnetport used for signalling announcements'),
+            ('Strict CAP parsing',  8,  1, config['cap']['strict_parsing'],   8,  20, 4,  3,        0,
+             'Enforce strict CAP XML parsing (yes/no)'),
+            ('CAP server host',     9,  1, config['cap']['host'],             9,  20, 46, 45,       0,
+             'IP address to host CAP HTTP server on (IPv4/IPv6)'),
+            ('CAP server port',     10, 1, config['cap']['port'],             10, 20, 6,  5,        0,
+             'Port to host CAP HTTP server on')
             ])
 
         if code == Dialog.OK:
@@ -348,12 +365,13 @@ def settings():
             config['dab'] = {
                                 'odrbin_path': elems[3],
                                 'mux_config': elems[4],
-                                'mod_config': elems[5]
+                                'mod_config': elems[5],
+                                'telnetport': elems[6]
                                 }
             config['cap'] = {
-                                'strict_parsing': elems[6],
-                                'host': elems[7],
-                                'port': elems[8]
+                                'strict_parsing': elems[7],
+                                'host': elems[8],
+                                'port': elems[9]
                                 }
             with open(server_config, 'w') as config_file:
                 config.write(config_file)
@@ -399,7 +417,7 @@ def main():
         code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', ok_label='Select', no_cancel=True, choices=
                           [( 'Status',      'View the server status')] +
                           ([('Ensemble',    'Configure DAB ensemble')] if dab_thread != None else []) +
-                          ([('Channels',    'Configure DAB sub-channels')] if dab_thread != None else []) +
+                          ([('Services',    'Configure DAB services and subchannels')] if dab_thread != None else []) +
                           [( 'Settings',    'Configure general server settings')] +
                           [( 'Logs',        'View the server logs')] +
                           [( 'Quit',        'Stop the server and quit the admin interface')]
@@ -411,8 +429,8 @@ def main():
             status()
         elif tag == 'Ensemble':
             ensemble_config()
-        elif tag == 'Channels':
-            channel_config()
+        elif tag == 'Services':
+            services_config()
         elif tag == 'Settings':
             settings()
         elif tag == 'Logs':
@@ -429,6 +447,8 @@ if __name__ == '__main__':
     cap_thread = cap_server(config)
     d.gauge_update(50, 'Starting DAB Server...', update_text=True)
     dab_thread, dab_cfg = dab_server(config)
+    d.gauge_update(75, 'Starting DAB streams...', update_text=True)
+    # TODO
     d.gauge_update(100, 'Ready!', update_text=True)
     d.gauge_stop()
 
