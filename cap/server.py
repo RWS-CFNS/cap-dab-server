@@ -83,7 +83,7 @@ class CAPServer(threading.Thread):
 
 def cap_server(config):
     global strict
-    strict = bool(config['cap']['strict_parsing'])
+    strict = config['cap'].getboolean('strict_parsing')
 
     # Check if the version of PyExpat is vulnerable to XML DDoS attacks (version 2.4.1+).
     # See https://docs.python.org/3/library/xml.html#xml-vulnerabilitiesk

@@ -40,11 +40,11 @@ if os.path.isfile(server_config):
     config.read(server_config)
 else:
     config['general'] = {
-                         'logdir': f'{CACHE_HOME}/cap-dab-server/',
+                         'logdir': f'{CACHE_HOME}/cap-dab-server',
                          'max_log_size': '8192'
                         }
     config['dab'] = {
-                         'odrbin_path': f'{sys.path[0]}/bin/',
+                         'odrbin_path': f'{sys.path[0]}/bin',
                          'mux_config': f'{CONFIG_HOME}/cap-dab-server/dabmux.mux',
                          'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini'
                         }
@@ -73,6 +73,29 @@ logger.addHandler(handler)
 
 d = Dialog(dialog='dialog', autowidgetsize=True)
 
+# Method to restart the DABServer
+def dab_restart():
+    global dab_thread, dab_cfg
+
+    # TODO check if any actual changes have been made
+
+    # save changes and reload the DAB server
+    logger.info('Restarting DAB server, one moment please...')
+    d.gauge_start('Saving changes, one moment please...', height=6, width=64, percent=0)
+    dab_cfg.write()
+    d.gauge_update(25, 'Shutting down DAB Server...', update_text=True)
+    dab_thread.join()
+
+    # give sockets some time to unbind before starting back up
+    d.gauge_update(50, 'Waiting for sockets to unbind...', update_text=True)
+    time.sleep(4)
+    d.gauge_update(75, 'Starting DAB Server...', update_text=True)
+    dab_thread, dab_cfg = dab_server(config)
+
+    d.gauge_update(100, 'Successfully saved!', update_text=True)
+    time.sleep(1)
+    d.gauge_stop()
+
 import subprocess # TODO TEMP, see note below
 def status():
     def state(b):
@@ -100,106 +123,206 @@ Invalid entry!
 {msg}
 ''',         title='Error', colors=True, width=60, height=8)
 
-def ensemble_config():
-    global dab_thread, dab_cfg
-
-    def country():
-        while True:
-            code, elems = d.form('''
+# Country ID modification menu, used for both ensemble and DAB services configuration
+def country_config(title, cid, ecc):
+    while True:
+        code, elems = d.form('''
 \ZbCountry ID\Zn and \ZbECC\Zn are found in section 5.4 Country Id of ETSI TS 101 756.
 These values both represent a hexidecimal value.
-\ZbCountry ID\Zn must be padded with 0xFFF.
-'''                              , colors=True, title='Country - Ensemble Configuration', elements=[
-                ('Country ID',  1, 1, dab_cfg.cfg.ensemble['id'][2:], 1, 20, 5, 4),
-                ('ECC',         2, 1, dab_cfg.cfg.ensemble['ecc'][2:], 2, 20, 3, 2),
-                ])
+\ZbCountry ID\Zn (Ensemble) must be padded with 0xFFF.
+\ZbService ID\Zn (Service) is Country ID (0x8) + Service ID (0xDAB) -> 0x8DAB.
+''',                         colors=True, title=f'Service ID and Country - {title}', elements=[
+                            ('Country/Service ID',  1, 1, str(cid)[2:], 1, 20, 5, 4),
+                            ('ECC',                 2, 1, str(ecc)[2:], 2, 20, 3, 2),
+                            ])
 
-            if code == Dialog.OK:
-                # check if the IDs are valid hexadecimal numbers
-                if not all(c in string.hexdigits for c in elems[0]) or not all(c in string.hexdigits for c in elems[1]):
-                    error('Invalid hexadecimal number.')
-                    continue
+        if code == Dialog.OK:
+            # check if the IDs are valid hexadecimal numbers
+            if not all(c in string.hexdigits for c in elems[0]):
+                error('Invalid Country/Service ID.')
+                continue
+            if elems[1] != '' and not all(c in string.hexdigits for c in elems[1]):
+                error('Invalid ECC.')
+                continue
 
-                # check the length of the IDs
-                if len(elems[0]) != 4 or len(elems[1]) != 2:
-                    error('Invalid length.\n\ZbCountry ID\Zn must be 4 digits and \ZbECC\Zn 2 digits in length.')
-                    continue
+            # check the length of the IDs
+            if len(elems[0]) != 4 or len(elems[1]) not in (0, 2):
+                error('Invalid length.\n\ZbCountry ID\Zn must be 4 digits and \ZbECC\Zn 2 digits in length.')
+                continue
 
-                dab_cfg.cfg.ensemble['id'] = f'0x{elems[0]}'
-                dab_cfg.cfg.ensemble['ecc'] = f'0x{elems[1]}'
+            return (f'0x{elems[0]}', None if elems[1] == '' else f'0x{elems[1]}')
+        else:
+            return (None, None)
 
-            break
-
-    def label():
-        while True:
-            code, elems = d.form('''
+# Label and short label renaming menu, used for both ensemble and DAB services configuration
+def label_config(title, label, shortlabel):
+    while True:
+        code, elems = d.form('''
 \ZbLabel\Zn cannot be longer than 16 characters.
 \ZbShort Label\Zn cannot be longer than 8 characters and must contain characters from \ZbLabel\Zn.
-''',                             colors=True, title='Label - Ensemble Configuration', elements=[
-                ('Label',       1, 1, dab_cfg.cfg.ensemble['label'], 1, 20, 17, 16),
-                ('Short Label', 2, 1, dab_cfg.cfg.ensemble['shortlabel'], 2, 20, 9, 8)
-                ])
+''',                         colors=True, title=f'Label - {title}', elements=[
+                            ('Label',       1, 1, label, 1, 20, 17, 16),
+                            ('Short Label', 2, 1, shortlabel, 2, 20, 9, 8)
+                            ])
 
-            if code == Dialog.OK:
-                # check if the shortlabel has characters from label
-                if all(c in elems[0] for c in elems[1]):
-                    dab_cfg.cfg.ensemble['label'] = elems[0]
-                    dab_cfg.cfg.ensemble['shortlabel'] = elems[1]
-                else:
-                    error('\ZbShort Label\Zn must contain characters from \ZbLabel\Zn.')
-                    continue
+        if code == Dialog.OK:
+            # check if the shortlabel has characters from label
+            if elems[1] == '':
+                return (elems[0], None)
+            elif all(c in elems[0] for c in elems[1]):
+                return (elems[0], elems[1])
+            else:
+                error('\ZbShort Label\Zn must contain characters from \ZbLabel\Zn.')
+                continue
 
-            break
+        return (None, None)
+
+def ensemble_config():
+    TITLE = 'DAB Ensemble Configuration'
 
     def announcements():
         # TODO implement
         pass
 
+    # before doing anything, create a copy of the current DAB config
+    dab_cfg.save()
+
     while True:
-        code, tag = d.menu('', title='Ensemble Configuration', choices=[
+        code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
                           ('Country',           'Change the DAB Country ID and ECC'),
                           ('Label',             'Change the ensemble label'),
-                          ('Announcements',     'Add/Remove/Modify ensemble announcements (FIG 0/19)'),
-                          ('< Save & Return',   'Return to the previous menu and save modified changes')
+                          ('Announcements',     'Add/Remove/Modify ensemble announcements (FIG 0/19)')
                           ])
 
-        if tag == 'Country':
-            country()
+        if code == Dialog.EXTRA:
+            dab_restart()
+            break
+        if code in (Dialog.CANCEL, Dialog.ESC):
+            # restore the old config
+            dab_cfg.restore()
+            break
+        elif tag == 'Country':
+            cid, ecc = country_config(TITLE, dab_cfg.cfg.ensemble['id'], dab_cfg.cfg.ensemble['ecc'])
+
+            if cid != None and ecc != None:
+                dab_cfg.cfg.ensemble['id'] = cid
+                dab_cfg.cfg.ensemble['ecc'] = ecc
         elif tag == 'Label':
-            label()
+            label, shortlabel = label_config(TITLE, dab_cfg.cfg.ensemble['label'], dab_cfg.cfg.ensemble['shortlabel'])
+
+            if label != None and shortlabel != None:
+                dab_cfg.cfg.ensemble['label'] = label
+                dab_cfg.cfg.ensemble['shortlabel'] = shortlabel
         elif tag == 'Announcements':
             announcements()
-        elif tag == '< Save & Return' or code in (Dialog.CANCEL, Dialog.ESC):
-            # TODO check if any actual changes have been made
-
-            # save changes and reload the DAB server
-            print('\nSaving changes, one moment please...')
-            logger.info('Restarting DAB server, one moment please...')
-            dab_cfg.write()
-            dab_thread.join()
-
-            # give sockets some time to unbind before starting back up
-            time.sleep(4)
-            dab_thread, dab_cfg = dab_server(config)
-
-            break
 
 def channel_config():
+    TITLE = 'DAB Sub-Channel Configuration'
+
+    def subch():
+        def modify(channel):
+            # TODO check if required fields have been entered (label and ID)
+
+            while True:
+                code, tag = d.menu('', title=f'{channel} - {TITLE}', extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
+                                ('Service ID',      'Change the service ID and override the ECC from the ensemble default'),
+                                ('Label',           'Change the service label'),
+                                ('Programme Type',  ''),
+                                ('Announcements',   '')
+                                ])
+
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    break
+                elif code == Dialog.EXTRA:
+                    yncode = d.yesno(f'Are you sure you want to delete the sub-channel {channel}?', width=60, height=6)
+                    if yncode == Dialog.OK:
+                        del dab_cfg.cfg.services[channel]
+                        break
+                elif tag == 'Service ID':
+                    cid, ecc = country_config(TITLE, dab_cfg.cfg.services[channel]['id'], dab_cfg.cfg.services[channel]['ecc'])
+
+                    if cid != None:
+                        dab_cfg.cfg.services[channel]['id'] = cid
+
+                    if ecc != None:
+                        dab_cfg.cfg.services[channel]['ecc'] = ecc
+                    else:
+                        del dab_cfg.cfg.services[channel]['ecc']
+                elif tag == 'Label':
+                    label, shortlabel = label_config(TITLE, dab_cfg.cfg.services[channel]['label'], dab_cfg.cfg.services[channel]['shortlabel'])
+
+                    if label != None:
+                        dab_cfg.cfg.services[channel]['label'] = label
+                    if shortlabel != None:
+                        dab_cfg.cfg.services[channel]['shortlabel'] = shortlabel
+                    else:
+                        del dab_cfg.cfg.services[channel]['shortlabel']
+                elif tag == 'Programme Type':
+                    # TODO implement
+                    pass
+                elif tag == 'Announcements':
+                    # TODO implement
+                    pass
+
+        def add():
+            while True:
+                code, string = d.inputbox('Please enter a new identifier/name for this sub-channel (no spaces)')
+                if ' ' in string:
+                    error('String cannot contain spaces.')
+                else:
+                    dab_cfg.cfg.services[string]
+                    modify(string)
+                    break
+
+        while True:
+            menu = [
+                   ('Add',      'Add a new subchannel')
+                   ]
+
+            # Load in subchannels from multiplexer config
+            i = 0
+            for key, value in dab_cfg.cfg.services:
+                menu.insert(i, (key, dab_cfg.cfg.services[key]['label']))
+                i += 1
+
+            code, tag = d.menu('Please select a subchannel', title=TITLE, cancel_label='Back', choices=menu)
+
+            if code in (Dialog.CANCEL, Dialog.ESC):
+                break
+            elif tag == 'Add':
+                add()
+            elif code == Dialog.OK:
+                modify(tag)
+
+    def streams():
+        pass
+
+    def announcements():
+        pass
+
+    # before doing anything, create a copy of the current DAB config
+    dab_cfg.save()
+
     while True:
-        code, tag = d.menu('Please select what you would like to do', title='DAB Sub-Channel Configuration', choices=[
-                          ('Add',           'Add a new sub-channel'),
-                          ('Rename',        'Rename the subchannel'),
-                          ('Announcements', 'Modify the supported announcements on the subchannel'),
-                          ('Stream',        'Set the sub-channel stream source'),
-                          ('Delete',        'Delete a sub-channel'),
-                          ('Alarm',         'Manually trigger an alarm announcement on a sub-channel'),
-                          ('< Return',      'Return to the previous menu')
+        code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
+                          ('List',              'Add/Modify sub-channels'),
+                          ('Streams',           'Add/Modify/Set the sub-channel stream source'),
+                          ('Announcements',     'Manually trigger announcements on a sub-channel')
                           ])
 
-        if tag == 'Alarm':
-            pass
-        elif tag == '< Return' or code in (Dialog.CANCEL, Dialog.ESC):
+        if code == Dialog.EXTRA:
+            dab_restart()
             break
+        elif code in (Dialog.CANCEL, Dialog.ESC):
+            # restore the old config
+            dab_cfg.restore()
+            break
+        elif tag == 'List':
+            subch()
+        elif tag == 'Streams':
+            streams()
+        elif tag == 'Announcements':
+            announcements()
 
 def settings():
     while True:
@@ -251,30 +374,29 @@ def logbox(file):
 
 def log():
     while True:
-        code, tag = d.menu('', title='Server log management', choices=[
+        code, tag = d.menu('', title='Server log management', ok_label='Select', cancel_label='Back', choices=[
                           ('Server',        'View main server log'),
                           ('CAP',           'View CAP HTTP server log'),
                           ('Multiplexer',   'View DAB Multiplexer log'),
-                          ('Modulator',     'View DAB Modulator log'),
-                          ('< Return',      'Return to the previous menu'),
+                          ('Modulator',     'View DAB Modulator log')
                           ])
 
         logdir = config['general']['logdir']
 
-        if tag == 'Server':
+        if code in (Dialog.CANCEL, Dialog.ESC):
+            break
+        elif tag == 'Server':
             logbox(f'{logdir}/server.log')
-        if tag == 'CAP':
+        elif tag == 'CAP':
             logbox(f'{logdir}/capsrv.log')
         elif tag == 'Multiplexer':
             logbox(f'{logdir}/dabmux.log')
         elif tag == 'Modulator':
             logbox(f'{logdir}/dabmod.log')
-        elif tag == '< Return' or code in (Dialog.CANCEL, Dialog.ESC):
-            break
 
 def main():
     while True:
-        code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', cancel_label='Quit', choices=
+        code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', ok_label='Select', no_cancel=True, choices=
                           [( 'Status',      'View the server status')] +
                           ([('Ensemble',    'Configure DAB ensemble')] if dab_thread != None else []) +
                           ([('Channels',    'Configure DAB sub-channels')] if dab_thread != None else []) +
@@ -283,7 +405,9 @@ def main():
                           [( 'Quit',        'Stop the server and quit the admin interface')]
                           )
 
-        if tag == 'Status':
+        if code == Dialog.ESC or tag == 'Quit':
+            break
+        elif tag == 'Status':
             status()
         elif tag == 'Ensemble':
             ensemble_config()
@@ -293,24 +417,30 @@ def main():
             settings()
         elif tag == 'Logs':
             log()
-        elif tag == 'Quit' or code in (Dialog.CANCEL, Dialog.ESC):
-            break
 
 if __name__ == '__main__':
     global cap_thread
     global dab_thread, dab_cfg
 
-    # start up CAP and DAB server threads
-    cap_thread = cap_server(config)
-    dab_thread, dab_cfg = dab_server(config)
-
     d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
+
+    # start up CAP and DAB server threads
+    d.gauge_start('Starting CAP Server...', height=6, width=64, percent=0)
+    cap_thread = cap_server(config)
+    d.gauge_update(50, 'Starting DAB Server...', update_text=True)
+    dab_thread, dab_cfg = dab_server(config)
+    d.gauge_update(100, 'Ready!', update_text=True)
+    d.gauge_stop()
 
     # open the main menu
     main()
 
     # wait for CAP and DAB server threads to end
+    d.gauge_start('Shutting down CAP Server...', height=6, width=64, percent=0)
     if cap_thread != None:
         cap_thread.join()
+    d.gauge_update(50, 'Shutting down DAB Server...', update_text=True)
     if dab_thread != None:
         dab_thread.join()
+    d.gauge_update(100, 'Goodbye!', update_text=True)
+    d.gauge_stop()

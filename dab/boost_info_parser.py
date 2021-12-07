@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # A copy of the GNU General Public License is in the file COPYING.
 
+import copy
 import shlex
 from collections import OrderedDict
 
@@ -28,6 +29,20 @@ class BoostInfoTree(object):
         self.parent = parent
 
         self.lastChild = None
+
+    def __copy__(self):
+        out = self.__class__.__new__(self.__class__)
+        out.__dict__.update(self.__dict__)
+
+        return out
+    def __deepcopy__(self, memo):
+        out = self.__class__.__new__(self.__class__)
+        memo[id(self)] = out
+
+        for key, value in self.__dict__.items():
+            setattr(out, key, copy.deepcopy(value, memo))
+
+        return out
 
     def __setitem__(self, key, value=None):
         newtree = BoostInfoTree(value, self)
@@ -53,6 +68,13 @@ class BoostInfoTree(object):
         if key in ('subTrees', 'value', 'parent', 'lastChild'):
             return object.__getattr__(self, key)
         return self.__getitem__(key)
+
+    def __iter__(self):
+        return iter(self.subTrees.items())
+
+    def __delitem__(self, key):
+        print(key)
+        del self.subTrees[key]
 
     def _prettyprint(self, indentLevel=1, first=True):
         prefix = ' ' * indentLevel

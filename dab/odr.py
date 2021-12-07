@@ -1,3 +1,4 @@
+import copy                                                         # For saving/restoring Config objects
 import os                                                           # For checking if files exist
 import logging                                                      # Logging facilities
 import threading                                                    # Threading support (for running Mux and Mod in the background)
@@ -63,7 +64,7 @@ class ODRMuxConfig():
 
     def load(self, cfgfile):
         if cfgfile == None:
-            return None
+            return False
 
         self.file = cfgfile
 
@@ -71,7 +72,9 @@ class ODRMuxConfig():
         if cfgfile != None and os.path.isfile(cfgfile):
             self.p.read(cfgfile)
             self.cfg = self.p.getRoot()
-            return self.cfg
+            return True
+
+        logger.warning(f'Unable to read {cfgfile}, creating a new config file')
 
         # generate a new config file otherwise
         self.cfg = BoostInfoTree()
@@ -104,7 +107,21 @@ class ODRMuxConfig():
 
         self.cfg.outputs['stdout'] = 'fifo:///dev/stdout?type=raw'
 
-        return self.cfg
+        self.p.load(self.cfg)
+        self.write()
+
+        return True
+
+    def save(self):
+        self.oldcfg = copy.deepcopy(self.cfg)
+
+    def restore(self):
+        if self.oldcfg == None:
+            return
+
+        self.cfg = self.oldcfg
+        self.oldcfg = None
 
     def write(self):
+        self.p.load(self.cfg)
         self.p.write(self.file)
