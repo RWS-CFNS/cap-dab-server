@@ -3,32 +3,27 @@ from dab.odr import *                     # OpenDigitalRadio server support
 
 logger = logging.getLogger('server.dab')
 
-class DABServer():
-    def __init__(logdir, muxcfg, modcfg):
-        self.logdir = logdir
-        self.muxcfg = muxcfg
-        self.modcfg = modcfg
-
-    def start():
-        logger.info('Starting up DAB ensemble...')
-        server = ODRServer(logdir, muxcfg, modcfg)
-        server.start()
-
-    def muxstate():
-        return True
-
-    def modstate():
-        return True
-
-def dab_server(config):
+def dab_server(q, config):
     logger.info('Starting up DAB ensemble...')
 
+    # Load ODR-DabMux configuration into memory
     cfg = ODRMuxConfig(config['dab']['telnetport'])
     if not cfg.load(config['dab']['mux_config']):
         logger.error(f'Invalid file: {muxcfg}. Unable to start DAB server')
-        return (None, None)
+        return (None, None, None)
 
+    # Create a watcher thread to process messages from the CAPServer
+    stream_config = config['dab']['stream_config']
+    watcher = DABWatcher(q, stream_config, config['dab']['telnetport'])
+    if watcher == None:
+        logger.error(f'Invalid file: {stream_config}. Unable to start DAB watcher thread')
+        return (None, None, None)
+
+    # Create the DABServer thread
     server = ODRServer(config['general']['logdir'], config['dab']['mux_config'], config['dab']['mod_config'])
-    server.start()
 
-    return (server, cfg)
+    # Start all threads
+    server.start()
+    watcher.start()
+
+    return (server, watcher, cfg)

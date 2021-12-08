@@ -9,13 +9,14 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 import configparser                 # Python INI file parser
 import logging                      # Logging facilities
 import logging.handlers             # Logging handlers
+import queue                        # Queue for passing data to the DAB processing thread
+import string                       # String utilities (for checking if string is hexadecimal)
 import threading                    # Threading support (for running Flask and DAB Mux/Mod in the background)
 import time                         # For sleep support
 from dialog import Dialog           # Beautiful dialogs using the external program dialog
 from cap.server import cap_server   # CAP server
 from dab.server import dab_server   # DAB server
 from dab.odr import ODRMuxConfig    # OpenDigitalRadio server support
-import string                       # String utilities (for checking if string is hexadecimal)
 
 # Max path length from limits.h
 MAX_PATH = os.pathconf('/', 'PC_PATH_MAX')
@@ -41,18 +42,24 @@ if os.path.isfile(server_config):
 else:
     config['general'] = {
                          'logdir': f'{CACHE_HOME}/cap-dab-server',
-                         'max_log_size': '8192'
+                         'max_log_size': '8192',
+                         'queuelimit': '10'
                         }
-    config['dab'] = {
+    config['dab'] =     {
+                         'stream_config': f'{CONFIG_HOME}/cap-dab-server/streams.ini',
                          'odrbin_path': f'{sys.path[0]}/bin',
                          'mux_config': f'{CONFIG_HOME}/cap-dab-server/dabmux.mux',
                          'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini',
                          'telnetport': '39899'
                         }
-    config['cap'] = {
+    config['cap'] =     {
                          'strict_parsing': 'no',
                          'host': '127.0.0.1',
                          'port': '39800'
+                        }
+    config['warning'] = {
+                         'alarm': 'yes',
+                         'replace': 'yes'
                         }
 
     with open(server_config, 'w') as config_file:
@@ -284,9 +291,7 @@ def services_config():
                     break
 
         while True:
-            menu = [
-                   ('Add',      'Add a new service')
-                   ]
+            menu = [('Add', 'Add a new service')]
 
             # Load in services from multiplexer config
             i = 0
@@ -306,6 +311,14 @@ def services_config():
     def streams():
         pass
 
+    def warning_config():
+        code, tag = d.checklist('Select the method by which you want the server to send DAB warning messages', choices=[
+                   ('Alarm',    'DAB native Alarm announcement', config['warning'].getboolean('alarm')),
+                   ('Replace',  'Channel stream replacement', config['warning'].getboolean('replace'))
+                   ])
+
+        sdf
+
     def announcements():
         pass
 
@@ -317,6 +330,7 @@ def services_config():
                           ('Services',          'Add/Modify services'),
                           ('Subchannels',       'Add/Modify subchannels'),
                           ('Streams',           'Add/Modify/Set the service stream source'),
+                          ('Warning method',    'Set the method by which warning messages are sent'),
                           ('Announcements',     'Manually trigger announcements on a service')
                           ])
 
@@ -333,32 +347,38 @@ def services_config():
             services()
         elif tag == 'Streams':
             streams()
+        elif tag == 'Warning method':
+            warning_config()
         elif tag == 'Announcements':
             announcements()
 
 def settings():
     while True:
-        code, elems = d.mixedform('''
-'''                              , title='Country - Ensemble Configuration', colors=True, ok_label='Save', item_help=True, help_tags=True, elements=[
+        code, elems = d.mixedform('', title='General Server Configuration', colors=True, ok_label='Save',
+                                  item_help=True, help_tags=True, elements=[
             ('Server config',       1,  1, server_config,                     1,  20, 64, MAX_PATH, 2,
              'server.ini config file path'),
             ('Log directory',       2,  1, config['general']['logdir'],       2,  20, 64, MAX_PATH, 0,
              'Directory to write log files to'),
             ('Max log size',        3,  1, config['general']['max_log_size'], 3,  20, 8,  7,        0,
              'Maximum size per log file in Kb'),
-            ('ODR binaries path',   4,  1, config['dab']['odrbin_path'],      4,  20, 64, MAX_PATH, 0,
+            ('CAP-DAB Queue limit', 4,  1, config['general']['queuelimit'],   4,  20, 8,  7,        0,
+             'Maximum number of CAP messages that can be in the queue at one moment'),
+            ('Stream config',       5,  1, config['dab']['stream_config'],    5,  20, 64, MAX_PATH, 0,
+             'streams.ini config file path'),
+            ('ODR binaries path',   6,  1, config['dab']['odrbin_path'],      6,  20, 64, MAX_PATH, 0,
              'Directory containing ODR-DabMux, ODR-DabMod, ODR-PadEnc and ODR-AudioEnc'),
-            ('ODR-DabMux config',   5,  1, config['dab']['mux_config'],       5,  20, 64, MAX_PATH, 0,
+            ('ODR-DabMux config',   7,  1, config['dab']['mux_config'],       7,  20, 64, MAX_PATH, 0,
              'dabmux.mux config file path'),
-            ('ODR-DabMod config',   6,  1, config['dab']['mod_config'],       6,  20, 64, MAX_PATH, 0,
+            ('ODR-DabMod config',   8,  1, config['dab']['mod_config'],       8,  20, 64, MAX_PATH, 0,
              'dabmod.ini config file path'),
-            ('DAB telnetport',      7,  1, config['dab']['telnetport'],       7,  20, 6,  5,        0,
+            ('DAB telnetport',      9,  1, config['dab']['telnetport'],       9,  20, 6,  5,        0,
              'Internally used DabMux telnetport used for signalling announcements'),
-            ('Strict CAP parsing',  8,  1, config['cap']['strict_parsing'],   8,  20, 4,  3,        0,
+            ('Strict CAP parsing',  10, 1, config['cap']['strict_parsing'],   10, 20, 4,  3,        0,
              'Enforce strict CAP XML parsing (yes/no)'),
-            ('CAP server host',     9,  1, config['cap']['host'],             9,  20, 46, 45,       0,
+            ('CAP server host',     11, 1, config['cap']['host'],             11, 20, 46, 45,       0,
              'IP address to host CAP HTTP server on (IPv4/IPv6)'),
-            ('CAP server port',     10, 1, config['cap']['port'],             10, 20, 6,  5,        0,
+            ('CAP server port',     12, 1, config['cap']['port'],             12, 20, 6,  5,        0,
              'Port to host CAP HTTP server on')
             ])
 
@@ -366,18 +386,20 @@ def settings():
             # Save the changes
             config['general'] = {
                                 'logdir': elems[1],
-                                'max_log_size': elems[2]
+                                'max_log_size': elems[2],
+                                'queuelimit': elems[3]
                                 }
             config['dab'] = {
-                                'odrbin_path': elems[3],
-                                'mux_config': elems[4],
-                                'mod_config': elems[5],
-                                'telnetport': elems[6]
+                                'stream_config': elems[4],
+                                'odrbin_path': elems[5],
+                                'mux_config': elems[6],
+                                'mod_config': elems[7],
+                                'telnetport': elems[8]
                                 }
             config['cap'] = {
-                                'strict_parsing': elems[7],
-                                'host': elems[8],
-                                'port': elems[9]
+                                'strict_parsing': elems[9],
+                                'host': elems[10],
+                                'port': elems[11]
                                 }
             with open(server_config, 'w') as config_file:
                 config.write(config_file)
@@ -418,7 +440,7 @@ def log():
         elif tag == 'Modulator':
             logbox(f'{logdir}/dabmod.log')
 
-def main():
+def main_menu():
     while True:
         code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', ok_label='Select', no_cancel=True, choices=
                           [( 'Status',      'View the server status')] +
@@ -442,33 +464,42 @@ def main():
         elif tag == 'Logs':
             log()
 
-if __name__ == '__main__':
+# Main setup
+def main():
     global cap_thread
     global dab_thread, dab_cfg
 
     d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
-    # start up CAP and DAB server threads
+    # Setup a queue for synchronizing data between the CAP and DAB threads
+    q = queue.Queue(maxsize=int(config['general']['queuelimit']))
+
+    # Start up CAP and DAB server threads
     d.gauge_start('Starting CAP Server...', height=6, width=64, percent=0)
-    cap_thread = cap_server(config)
+    cap_thread = cap_server(q, config)
     d.gauge_update(33, 'Starting DAB Server...', update_text=True)
-    dab_thread, dab_cfg = dab_server(config)
+    dab_thread, dab_watcher, dab_cfg = dab_server(q, config)
     d.gauge_update(66, 'Starting DAB streams...', update_text=True)
     # TODO
     d.gauge_update(100, 'Ready!', update_text=True)
     d.gauge_stop()
 
-    # open the main menu
-    main()
+    # Open the main menu
+    main_menu()
 
-    # wait for CAP and DAB server threads to end
+    # Wait for CAP and DAB server threads to end
     d.gauge_start('Shutting down CAP Server...', height=6, width=64, percent=0)
     if cap_thread != None:
         cap_thread.join()
     d.gauge_update(33, 'Shutting down DAB streams...', update_text=True)
     # TODO
     d.gauge_update(66, 'Shutting down DAB Server...', update_text=True)
+    if dab_watcher != None:
+        dab_watcher.join()
     if dab_thread != None:
         dab_thread.join()
     d.gauge_update(100, 'Goodbye!', update_text=True)
     d.gauge_stop()
+
+if __name__ == '__main__':
+    main()

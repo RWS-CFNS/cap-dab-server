@@ -1,8 +1,9 @@
 import threading                            # Threading support (for running Flask in the background)
 import logging                              # Logging facilities
 import logging.handlers                     # Logging handlers
-import re                                   # For removing color from werkzeug's log messages
 import pyexpat                              # CAP XML parser backend (only used for version check)
+import queue                                # Queue for passing data to the DAB processing thread
+import re                                   # For removing color from werkzeug's log messages
 import os                                   # For redirecting Flask's logging output to a file using an env. variable
 from flask import Flask, Response, request  # Flask HTTP server library
 from werkzeug.serving import make_server    # Flask backend
@@ -53,11 +54,23 @@ def index():
     try:
         cp = CAPParser(app, strict)
     except Exception as e:
-        app.logger.error(f'FAIL: {e}')
-        exit(1)
+        logger.error(e)
+        return Response(status=500)
 
     # Parse the Xml into memory and check if all required elements present
     if not cp.parse(request.data):
+        logger.error('Unable to parse message')
+        return Response(status=400)
+
+    if cp.msg_type == CAPParser.TYPE_LINK_TEST:
+        # TODO generate response
+        pass
+    elif cp.msg_type == CAPParser.TYPE_ALERT:
+        try:
+            q.put((cp.lang, cp.effective, cp.expires, cp.description))
+        except queue.Full:
+            logger.error('Queue is full, perhaps increase queuelimit?')
+    else:
         return Response(status=400)
 
     # Generate an appropriate response
@@ -79,11 +92,15 @@ class CAPServer(threading.Thread):
     def join(self):
         logger.info('Waiting for CAP HTTP server to terminate...')
         self.server.shutdown()
+        super().join()
         logger.info('CAP HTTP server terminated successfully!')
 
-def cap_server(config):
+def cap_server(_q, config):
     global strict
+    global q
     strict = config['cap'].getboolean('strict_parsing')
+
+    q = _q
 
     # Check if the version of PyExpat is vulnerable to XML DDoS attacks (version 2.4.1+).
     # See https://docs.python.org/3/library/xml.html#xml-vulnerabilitiesk

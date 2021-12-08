@@ -1,11 +1,68 @@
+import configparser                                                 # Python INI file parser
 import copy                                                         # For saving/restoring Config objects
 import os                                                           # For checking if files exist
 import logging                                                      # Logging facilities
+import queue                                                        # Queue for passing data to the DAB processing thread
+import telnetlib                                                    # For signalling (alarm) announcements from DABWatcher
 import threading                                                    # Threading support (for running Mux and Mod in the background)
 import subprocess as subproc                                        # Support for starting subprocesses
 from dab.boost_info_parser import BoostInfoTree, BoostInfoParser    # C++ Boost INFO format parser (used for dabmux.cfg)
 
 logger = logging.getLogger('server.dab')
+
+# DAB queue watcher and message processing
+# This thread handles messages received from the CAPServer
+class DABWatcher(threading.Thread):
+    def __init__(self, q, stream_config, telnetport):
+        threading.Thread.__init__(self)
+
+        self.q = q
+        self.telnetport = telnetport
+
+        # Load in streams.ini
+        os.makedirs(os.path.dirname(stream_config), exist_ok=True)
+        self.config = configparser.ConfigParser()
+        if os.path.isfile(stream_config):
+            self.config.read(stream_config)
+        else:
+            return None
+
+        #with open(stream_config, 'w') as config_file:
+            #config.write(config_file)
+
+        self._running = True
+
+    def run(self):
+        # main a list of currently active announcements with their expiry date
+        announcements = []
+
+        while self._running:
+            try:
+                # Wait for a message from the CAPServer
+                lang, effective, expires, description = self.q.get(block=True, timeout=4)
+                logger.info(lang + effective + expires + description)
+
+                # signal the alarm announcement
+                # TODO start later if effective is later than current time
+                with telnetlib.Telnet('localhost', self.telnetport) as t:
+                    t.write(b'set alarm active 1\n')
+
+                # FIXME instead do this:
+                # update DLS
+                # if type_mask has Alarm announcement
+                #    signal alarm announcement via telnet
+                # if type_mask has Stream replacement
+                #    replace all streams with the one from sub-alarm
+                #    replace all service labels, pty with the ones from srv-alarm
+                # if type_mask has both:
+                #    do both of the above
+            except queue.Empty:
+                pass
+
+    def join(self):
+        self._running = False
+        self.q.join()
+        super().join()
 
 # OpenDigitalRadio DAB Multiplexer and Modulator support
 class ODRServer(threading.Thread):
@@ -28,6 +85,7 @@ class ODRServer(threading.Thread):
 
         # Start up odr-dabmod DAB modulator
         modlog.write('\n'.encode('utf-8'))
+        # TODO load dabmod config
         #mod = subproc.Popen(('bin/odr-dabmod', self.modcfg), stdin=mux.stdout, stdout=subproc.PIPE, stderr=modlog)
         mod = subproc.Popen(('bin/odr-dabmod', '-f', '/tmp/welle-io.fifo', '-m', '1', '-F', 'u8'),
                     stdin=mux.stdout, stdout=subproc.PIPE, stderr=modlog)
@@ -57,6 +115,8 @@ class ODRServer(threading.Thread):
                 logger.info('DAB modulator terminated successfully!')
             else:
                 logger.error('Terminating DAB multiplexer failed. Attempt quitting manually.')
+
+        super().join()
 
 class ODRMuxConfig():
     def __init__(self, telnetport):

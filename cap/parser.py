@@ -17,6 +17,10 @@ def logger_strict(app, msg):
         return False
 
 class CAPParser:
+    # Constants
+    TYPE_LINK_TEST = 0
+    TYPE_ALERT     = 1
+
     # CAP version namespaces
     # NOTE: CAP v1.2 is hardcoded right now
     NS = {
@@ -32,6 +36,7 @@ class CAPParser:
     def __init__(self, app, strict):
         self.app = app
         self.strict = strict
+        self.msg_type = None
 
     # Generate a current timestamp
     def generate_timestamp(self):
@@ -201,5 +206,23 @@ class CAPParser:
         # Check if all required elements are present
         if not self.__check_elements(root):
             return False
+
+        # Parse the elements into class-wide variables
+        msgType = root.find('CAPv1.2:msgType', self.NS).text
+        if msgType == 'Alert':
+            status = root.find('CAPv1.2:status', self.NS).text
+            if status == 'Test':
+                self.msg_type = self.TYPE_LINK_TEST
+            elif status == 'Actual':
+                self.msg_type = self.TYPE_ALERT
+
+                info = root.find(f'CAPv1.2:info', self.NS)
+                self.lang = info.find(f'CAPv1.2:language', self.NS).text
+                self.effective = info.find(f'CAPv1.2:effective', self.NS).text
+                self.expires = info.find(f'CAPv1.2:expires', self.NS).text
+                self.description = info.find(f'CAPv1.2:description', self.NS).text
+
+        if self.msg_type == None:
+            logger.error(f'Unknown message type: {msgType}')
 
         return True
