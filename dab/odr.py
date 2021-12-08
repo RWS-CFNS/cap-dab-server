@@ -76,6 +76,7 @@ class ODRMuxConfig():
 
             # overwrite the default telnetport with the port specified in the server settings file
             self.cfg.remotecontrol['telnetport'] = str(self.telnetport)
+            self.write()
 
             return True
 
@@ -120,6 +121,7 @@ class ODRMuxConfig():
         root.services['srv-alarm']['announcements']['Alarm'] = 'true'
         root.services['srv-alarm']['announcements']['clusters'] = '1'
 
+        # FIXME generate subchannel on the fly based on streams.ini
         root.subchannels['sub-alarm']['type'] = 'dabplus'
         root.subchannels['sub-alarm']['bitrate'] = '96'
         root.subchannels['sub-alarm']['id'] = '1'
@@ -138,7 +140,6 @@ class ODRMuxConfig():
         # Output to stdout because we'll be piping the output into ODR-DabMux
         self.cfg.outputs['stdout'] = 'fifo:///dev/stdout?type=raw'
 
-        self.p.load(self.cfg)
         self.write()
 
         return True

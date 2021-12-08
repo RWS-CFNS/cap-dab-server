@@ -157,6 +157,8 @@ These values both represent a hexidecimal value.
 
 # Label and short label renaming menu, used for both ensemble and DAB services configuration
 def label_config(title, label, shortlabel):
+    print(label)
+    print(shortlabel)
     while True:
         code, elems = d.form('''
 \ZbLabel\Zn cannot be longer than 16 characters.
@@ -221,11 +223,11 @@ def services_config():
     TITLE = 'DAB Service Configuration'
 
     def services():
-        def modify(channel):
+        def modify(service):
             # TODO check if required fields have been entered (label and ID)
 
             while True:
-                code, tag = d.menu('', title=f'{channel} - {TITLE}', extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
+                code, tag = d.menu('', title=f'{service} - {TITLE}', extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
                                 ('Service ID',      'Change the service ID and override the ECC from the ensemble default'),
                                 ('Label',           'Change the service label'),
                                 ('Programme Type',  ''),
@@ -235,31 +237,35 @@ def services_config():
                 if code in (Dialog.CANCEL, Dialog.ESC):
                     break
                 elif code == Dialog.EXTRA:
-                    yncode = d.yesno(f'Are you sure you want to delete the service {channel}?', width=60, height=6)
+                    yncode = d.yesno(f'Are you sure you want to delete the service {service}?', width=60, height=6)
                     if yncode == Dialog.OK:
-                        del dab_cfg.cfg.services[channel]
+                        del dab_cfg.cfg.services[service]
                         break
                 elif tag == 'Service ID':
-                    sid, ecc = country_config(TITLE, dab_cfg.cfg.services[channel]['id'], dab_cfg.cfg.services[channel]['ecc'])
+                    sid, ecc = country_config(TITLE,
+                                              dab_cfg.cfg.services[service]['id'],
+                                              dab_cfg.cfg.services[service]['ecc'])
 
                     # TODO check if Service ID is already in use
 
                     if sid != None:
-                        dab_cfg.cfg.services[channel]['id'] = sid
+                        dab_cfg.cfg.services[service]['id'] = sid
 
                     if ecc != None:
-                        dab_cfg.cfg.services[channel]['ecc'] = ecc
+                        dab_cfg.cfg.services[service]['ecc'] = ecc
                     else:
-                        del dab_cfg.cfg.services[channel]['ecc']
+                        del dab_cfg.cfg.services[service]['ecc']
                 elif tag == 'Label':
-                    label, shortlabel = label_config(TITLE, dab_cfg.cfg.services[channel]['label'], dab_cfg.cfg.services[channel]['shortlabel'])
+                    label, shortlabel = label_config(TITLE,
+                                                     dab_cfg.cfg.services[service]['label'],
+                                                     dab_cfg.cfg.services[service]['shortlabel'])
 
                     if label != None:
-                        dab_cfg.cfg.services[channel]['label'] = label
+                        dab_cfg.cfg.services[service]['label'] = label
                     if shortlabel != None:
-                        dab_cfg.cfg.services[channel]['shortlabel'] = shortlabel
+                        dab_cfg.cfg.services[service]['shortlabel'] = shortlabel
                     else:
-                        del dab_cfg.cfg.services[channel]['shortlabel']
+                        del dab_cfg.cfg.services[service]['shortlabel']
                 elif tag == 'Programme Type':
                     # TODO implement
                     pass
@@ -445,9 +451,9 @@ if __name__ == '__main__':
     # start up CAP and DAB server threads
     d.gauge_start('Starting CAP Server...', height=6, width=64, percent=0)
     cap_thread = cap_server(config)
-    d.gauge_update(50, 'Starting DAB Server...', update_text=True)
+    d.gauge_update(33, 'Starting DAB Server...', update_text=True)
     dab_thread, dab_cfg = dab_server(config)
-    d.gauge_update(75, 'Starting DAB streams...', update_text=True)
+    d.gauge_update(66, 'Starting DAB streams...', update_text=True)
     # TODO
     d.gauge_update(100, 'Ready!', update_text=True)
     d.gauge_stop()
@@ -459,7 +465,9 @@ if __name__ == '__main__':
     d.gauge_start('Shutting down CAP Server...', height=6, width=64, percent=0)
     if cap_thread != None:
         cap_thread.join()
-    d.gauge_update(50, 'Shutting down DAB Server...', update_text=True)
+    d.gauge_update(33, 'Shutting down DAB streams...', update_text=True)
+    # TODO
+    d.gauge_update(66, 'Shutting down DAB Server...', update_text=True)
     if dab_thread != None:
         dab_thread.join()
     d.gauge_update(100, 'Goodbye!', update_text=True)

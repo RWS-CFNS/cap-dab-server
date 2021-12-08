@@ -44,6 +44,12 @@ class BoostInfoTree(object):
 
         return out
 
+    def __len__(self):
+        if self.value == None:
+            return len(self.subTrees)
+        else:
+            return len(self.value)
+
     def __setitem__(self, key, value=None):
         newtree = BoostInfoTree(value, self)
         if key in self.subTrees:
@@ -63,7 +69,12 @@ class BoostInfoTree(object):
             self.__setitem__(key, None)
 
         tree = self.subTrees[key][0]
-        return tree if tree.value == None else tree.value
+        if tree.value != None and len(tree.value) > 0:
+            return tree.value
+        elif len(tree) > 0:
+            return tree
+        else:
+            return ''
     def __getattr__(self, key):
         if key in ('subTrees', 'value', 'parent', 'lastChild'):
             return object.__getattr__(self, key)
