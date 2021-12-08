@@ -14,8 +14,9 @@ import string                       # String utilities (for checking if string i
 import threading                    # Threading support (for running Flask and DAB Mux/Mod in the background)
 import time                         # For sleep support
 from dialog import Dialog           # Beautiful dialogs using the external program dialog
-from cap.server import cap_server   # CAP server
-from dab.server import dab_server   # DAB server
+from cap.server import CAPServer    # CAP server
+from dab.server import DABServer    # DAB server
+from dab.streams import dab_streams # DAB sources
 from dab.odr import ODRMuxConfig    # OpenDigitalRadio server support
 
 # Max path length from limits.h
@@ -81,30 +82,16 @@ logger.addHandler(handler)
 
 d = Dialog(dialog='dialog', autowidgetsize=True)
 
-# Method to restart the DABServer
 def dab_restart():
-    global dab_thread, dab_cfg
-
-    # TODO check if any actual changes have been made
-
-    # save changes and reload the DAB server
-    logger.info('Restarting DAB server, one moment please...')
     d.gauge_start('Saving changes, one moment please...', height=6, width=64, percent=0)
-    dab_cfg.write()
-    d.gauge_update(25, 'Shutting down DAB Server...', update_text=True)
-    dab_thread.join()
-
-    # give sockets some time to unbind before starting back up
-    d.gauge_update(50, 'Waiting for sockets to unbind...', update_text=True)
-    time.sleep(4)
-    d.gauge_update(75, 'Starting DAB Server...', update_text=True)
-    dab_thread, dab_cfg = dab_server(config)
-
-    d.gauge_update(100, 'Successfully saved!', update_text=True)
-    time.sleep(1)
+    if dab.restart():
+        d.gauge_update(100, 'Successfully saved!', update_text=True)
+    else:
+        d.gauge_update(33, 'Failed to start DAB server, please refer to the server logs', update_text=True)
+        time.sleep(4)
+    time.sleep(0.5)
     d.gauge_stop()
 
-import subprocess # TODO TEMP, see note below
 def status():
     def state(b):
         if b:
@@ -114,11 +101,16 @@ def status():
 
     # TODO interface with the DABServer class to obtain the mux and mod status
     while True:
+        cap_server = cap.status()
+        dab_server, dab_watcher, dab_mux, dab_mod = dab.status()
+
         code = d.msgbox(f'''
-CAP HTTP Server     {'FAILED' if cap_thread == None else state(cap_thread.is_alive())}
-DAB Server Thread   {'FAILED' if dab_thread == None else state(dab_thread.is_alive())}
-DAB Multiplexer     {state(True if subprocess.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0 else False)}
-DAB Modulator       {state(True if subprocess.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0 else False)}
+CAP HTTP Server     {state(cap_server)}
+DAB Server          {state(dab_server)}
+DAB Watcher         {state(dab_watcher)}
+DAB Streams         {state(False)}
+DAB Multiplexer     {state(dab_mux)}
+DAB Modulator       {state(dab_mod)}
 ''',                    colors=True, title='Server Status', no_collapse=True,
                         ok_label='Refresh', extra_button=True, extra_label='Exit')
 
@@ -195,7 +187,7 @@ def ensemble_config():
         pass
 
     # before doing anything, create a copy of the current DAB config
-    dab_cfg.save()
+    dab.config.save()
 
     while True:
         code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
@@ -209,20 +201,20 @@ def ensemble_config():
             break
         if code in (Dialog.CANCEL, Dialog.ESC):
             # restore the old config
-            dab_cfg.restore()
+            dab.config.restore()
             break
         elif tag == 'Country':
-            cid, ecc = country_config(TITLE, dab_cfg.cfg.ensemble['id'], dab_cfg.cfg.ensemble['ecc'])
+            cid, ecc = country_config(TITLE, dab.config.cfg.ensemble['id'], dab.config.cfg.ensemble['ecc'])
 
             if cid != None and ecc != None:
-                dab_cfg.cfg.ensemble['id'] = cid
-                dab_cfg.cfg.ensemble['ecc'] = ecc
+                dab.config.cfg.ensemble['id'] = cid
+                dab.config.cfg.ensemble['ecc'] = ecc
         elif tag == 'Label':
-            label, shortlabel = label_config(TITLE, dab_cfg.cfg.ensemble['label'], dab_cfg.cfg.ensemble['shortlabel'])
+            label, shortlabel = label_config(TITLE, dab.config.cfg.ensemble['label'], dab.config.cfg.ensemble['shortlabel'])
 
             if label != None and shortlabel != None:
-                dab_cfg.cfg.ensemble['label'] = label
-                dab_cfg.cfg.ensemble['shortlabel'] = shortlabel
+                dab.config.cfg.ensemble['label'] = label
+                dab.config.cfg.ensemble['shortlabel'] = shortlabel
         elif tag == 'Announcements':
             announcements()
 
@@ -246,33 +238,33 @@ def services_config():
                 elif code == Dialog.EXTRA:
                     yncode = d.yesno(f'Are you sure you want to delete the service {service}?', width=60, height=6)
                     if yncode == Dialog.OK:
-                        del dab_cfg.cfg.services[service]
+                        del dab.config.cfg.services[service]
                         break
                 elif tag == 'Service ID':
                     sid, ecc = country_config(TITLE,
-                                              dab_cfg.cfg.services[service]['id'],
-                                              dab_cfg.cfg.services[service]['ecc'])
+                                              dab.config.cfg.services[service]['id'],
+                                              dab.config.cfg.services[service]['ecc'])
 
                     # TODO check if Service ID is already in use
 
                     if sid != None:
-                        dab_cfg.cfg.services[service]['id'] = sid
+                        dab.config.cfg.services[service]['id'] = sid
 
                     if ecc != None:
-                        dab_cfg.cfg.services[service]['ecc'] = ecc
+                        dab.config.cfg.services[service]['ecc'] = ecc
                     else:
-                        del dab_cfg.cfg.services[service]['ecc']
+                        del dab.config.cfg.services[service]['ecc']
                 elif tag == 'Label':
                     label, shortlabel = label_config(TITLE,
-                                                     dab_cfg.cfg.services[service]['label'],
-                                                     dab_cfg.cfg.services[service]['shortlabel'])
+                                                     dab.config.cfg.services[service]['label'],
+                                                     dab.config.cfg.services[service]['shortlabel'])
 
                     if label != None:
-                        dab_cfg.cfg.services[service]['label'] = label
+                        dab.config.cfg.services[service]['label'] = label
                     if shortlabel != None:
-                        dab_cfg.cfg.services[service]['shortlabel'] = shortlabel
+                        dab.config.cfg.services[service]['shortlabel'] = shortlabel
                     else:
-                        del dab_cfg.cfg.services[service]['shortlabel']
+                        del dab.config.cfg.services[service]['shortlabel']
                 elif tag == 'Programme Type':
                     # TODO implement
                     pass
@@ -286,7 +278,7 @@ def services_config():
                 if ' ' in string:
                     error('String cannot contain spaces.')
                 else:
-                    dab_cfg.cfg.services[string]
+                    dab.config.cfg.services[string]
                     modify(string)
                     break
 
@@ -295,8 +287,8 @@ def services_config():
 
             # Load in services from multiplexer config
             i = 0
-            for key, value in dab_cfg.cfg.services:
-                menu.insert(i, (key, dab_cfg.cfg.services[key]['label']))
+            for key, value in dab.config.cfg.services:
+                menu.insert(i, (key, dab.config.cfg.services[key]['label']))
                 i += 1
 
             code, tag = d.menu('Please select a service', title=TITLE, cancel_label='Back', choices=menu)
@@ -323,7 +315,7 @@ def services_config():
         pass
 
     # before doing anything, create a copy of the current DAB config
-    dab_cfg.save()
+    dab.config.save()
 
     while True:
         code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
@@ -339,7 +331,7 @@ def services_config():
             break
         elif code in (Dialog.CANCEL, Dialog.ESC):
             # restore the old config
-            dab_cfg.restore()
+            dab.config.restore()
             break
         elif tag == 'Services':
             services()
@@ -444,8 +436,8 @@ def main_menu():
     while True:
         code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', ok_label='Select', no_cancel=True, choices=
                           [( 'Status',      'View the server status')] +
-                          ([('Ensemble',    'Configure DAB ensemble')] if dab_thread != None else []) +
-                          ([('Services',    'Configure DAB services and subchannels')] if dab_thread != None else []) +
+                          [('Ensemble',    'Configure DAB ensemble')] +
+                          [('Services',    'Configure DAB services and subchannels')] +
                           [( 'Settings',    'Configure general server settings')] +
                           [( 'Logs',        'View the server logs')] +
                           [( 'Quit',        'Stop the server and quit the admin interface')]
@@ -466,39 +458,56 @@ def main_menu():
 
 # Main setup
 def main():
-    global cap_thread
-    global dab_thread, dab_cfg
+    global cap, dab
 
     d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
     # Setup a queue for synchronizing data between the CAP and DAB threads
     q = queue.Queue(maxsize=int(config['general']['queuelimit']))
 
-    # Start up CAP and DAB server threads
+    # Start up CAP server
     d.gauge_start('Starting CAP Server...', height=6, width=64, percent=0)
-    cap_thread = cap_server(q, config)
-    d.gauge_update(33, 'Starting DAB Server...', update_text=True)
-    dab_thread, dab_watcher, dab_cfg = dab_server(q, config)
-    d.gauge_update(66, 'Starting DAB streams...', update_text=True)
-    # TODO
+    cap = CAPServer(config, q)
+    if not cap.start():
+        d.gauge_update(17, 'Failed to start CAP server, please refer to the server logs', update_text=True)
+        time.sleep(4)
+
+    # Start the DAB server
+    d.gauge_update(33, 'Starting DAB server...', update_text=True)
+    dab = DABServer(config, q)
+    if not dab.start():
+        d.gauge_update(50, 'Failed to start DAB server, please refer to the server logs', update_text=True)
+        time.sleep(4)
+
+    # Start the DAB streams
+    try:
+        d.gauge_update(66, 'Starting DAB streams...', update_text=True)
+        #dab_streams(config)
+    except Exception:
+        d.gauge_update(83, 'Failed to start DAB streams, please check configuration', update_text=True)
+        time.sleep(4)
+
     d.gauge_update(100, 'Ready!', update_text=True)
+    time.sleep(0.5)
     d.gauge_stop()
 
     # Open the main menu
     main_menu()
 
-    # Wait for CAP and DAB server threads to end
+    # Stop the CAP server
     d.gauge_start('Shutting down CAP Server...', height=6, width=64, percent=0)
-    if cap_thread != None:
-        cap_thread.join()
+    cap.stop()
+
+    # Stop the DAB streams
     d.gauge_update(33, 'Shutting down DAB streams...', update_text=True)
     # TODO
-    d.gauge_update(66, 'Shutting down DAB Server...', update_text=True)
-    if dab_watcher != None:
-        dab_watcher.join()
-    if dab_thread != None:
-        dab_thread.join()
+
+    # Stop the DAB server
+    d.gauge_update(66, 'Shutting down DAB server...', update_text=True)
+    dab.stop()
+
     d.gauge_update(100, 'Goodbye!', update_text=True)
+    time.sleep(0.5)
     d.gauge_stop()
 
 if __name__ == '__main__':

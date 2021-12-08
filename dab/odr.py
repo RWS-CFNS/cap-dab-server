@@ -13,19 +13,24 @@ logger = logging.getLogger('server.dab')
 # DAB queue watcher and message processing
 # This thread handles messages received from the CAPServer
 class DABWatcher(threading.Thread):
-    def __init__(self, q, stream_config, telnetport):
+    def __init__(self, config, q):
         threading.Thread.__init__(self)
 
+        self.telnetport = config['dab']['telnetport']
+        self.alarm = config['warning']['alarm']
+        self.replace = config['warning']['replace']
+
         self.q = q
-        self.telnetport = telnetport
 
         # Load in streams.ini
+        stream_config = config['dab']['stream_config']
         os.makedirs(os.path.dirname(stream_config), exist_ok=True)
         self.config = configparser.ConfigParser()
         if os.path.isfile(stream_config):
             self.config.read(stream_config)
         else:
-            return None
+            logger.error(f'Invalid file: {stream_config}. Unable to start DAB watcher thread')
+            raise OSError.FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), stream_config)
 
         #with open(stream_config, 'w') as config_file:
             #config.write(config_file)
@@ -42,20 +47,16 @@ class DABWatcher(threading.Thread):
                 lang, effective, expires, description = self.q.get(block=True, timeout=4)
                 logger.info(lang + effective + expires + description)
 
-                # signal the alarm announcement
-                # TODO start later if effective is later than current time
-                with telnetlib.Telnet('localhost', self.telnetport) as t:
-                    t.write(b'set alarm active 1\n')
+                if self.alarm:
+                    # signal the alarm announcement
+                    # TODO start later if effective is later than current time
+                    with telnetlib.Telnet('localhost', self.telnetport) as t:
+                        t.write(b'set alarm active 1\n')
 
-                # FIXME instead do this:
-                # update DLS
-                # if type_mask has Alarm announcement
-                #    signal alarm announcement via telnet
-                # if type_mask has Stream replacement
-                #    replace all streams with the one from sub-alarm
-                #    replace all service labels, pty with the ones from srv-alarm
-                # if type_mask has both:
-                #    do both of the above
+                if self.replace:
+                    #replace all streams with the one from sub-alarm
+                    #replace all service labels, pty with the ones from srv-alarm
+                    pass
             except queue.Empty:
                 pass
 
@@ -66,12 +67,12 @@ class DABWatcher(threading.Thread):
 
 # OpenDigitalRadio DAB Multiplexer and Modulator support
 class ODRServer(threading.Thread):
-    def __init__(self, logdir, muxcfg, modcfg):
+    def __init__(self, config):
         threading.Thread.__init__(self)
 
-        self.logdir = logdir
-        self.muxcfg = muxcfg
-        self.modcfg = modcfg
+        self.logdir = config['general']['logdir']
+        self.muxcfg = config['dab']['mux_config']
+        self.modcfg = config['dab']['mod_config']
 
     def run(self):
         # TODO rotate this log, this is not so straightforward it appears
@@ -118,6 +119,7 @@ class ODRServer(threading.Thread):
 
         super().join()
 
+# ODR-DabMux config file wrapper class
 class ODRMuxConfig():
     def __init__(self, telnetport):
         self.p = BoostInfoParser()
