@@ -53,12 +53,18 @@ class DABServer():
         return True
 
     def stop(self):
+        if self.config == None:
+            return
+
         if self._odr != None:
             self._odr.join()
         if self._watcher != None:
             self._watcher.join()
 
     def restart(self):
+        if self.config == None:
+            return False
+
         # Save changes made to the multiplexer config
         self.config.write()
 
@@ -73,6 +79,9 @@ class DABServer():
 
     # Return the status of the (DAB Server, DAB watcher, DAB Multiplexer, DAB MOdulator)
     def status(self):
+        if self.config == None:
+            return (False, False, False, False)
+
         server = self._odr.is_alive()
         watcher = self._watcher.is_alive()
         # FIXME check these properly

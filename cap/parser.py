@@ -16,7 +16,7 @@ def logger_strict(app, msg):
         logger.warning(msg)
         return False
 
-class CAPParser:
+class CAPParser():
     # Constants
     TYPE_LINK_TEST = 0
     TYPE_ALERT     = 1

@@ -3,9 +3,9 @@ import copy                                                         # For saving
 import os                                                           # For checking if files exist
 import logging                                                      # Logging facilities
 import queue                                                        # Queue for passing data to the DAB processing thread
+import subprocess as subproc                                        # Support for starting subprocesses
 import telnetlib                                                    # For signalling (alarm) announcements from DABWatcher
 import threading                                                    # Threading support (for running Mux and Mod in the background)
-import subprocess as subproc                                        # Support for starting subprocesses
 from dab.boost_info_parser import BoostInfoTree, BoostInfoParser    # C++ Boost INFO format parser (used for dabmux.cfg)
 
 logger = logging.getLogger('server.dab')
@@ -71,6 +71,7 @@ class ODRServer(threading.Thread):
         threading.Thread.__init__(self)
 
         self.logdir = config['general']['logdir']
+        self.binpath = config['dab']['odrbin_path']
         self.muxcfg = config['dab']['mux_config']
         self.modcfg = config['dab']['mod_config']
 
@@ -81,28 +82,25 @@ class ODRServer(threading.Thread):
 
         # Start up odr-dabmux DAB multiplexer
         muxlog.write('\n'.encode('utf-8'))
-        mux = subproc.Popen(('bin/odr-dabmux', self.muxcfg), stdout=subproc.PIPE, stderr=muxlog)
-        self.mux = mux
+        self.mux = subproc.Popen((f'{self.binpath}/odr-dabmux', self.muxcfg), stdout=subproc.PIPE, stderr=muxlog)
 
         # Start up odr-dabmod DAB modulator
         modlog.write('\n'.encode('utf-8'))
         # TODO load dabmod config
         #mod = subproc.Popen(('bin/odr-dabmod', self.modcfg), stdin=mux.stdout, stdout=subproc.PIPE, stderr=modlog)
-        mod = subproc.Popen(('bin/odr-dabmod', '-f', '/tmp/welle-io.fifo', '-m', '1', '-F', 'u8'),
-                    stdin=mux.stdout, stdout=subproc.PIPE, stderr=modlog)
-        self.mod = mod
+        self.mod = subproc.Popen((f'{self.binpath}/odr-dabmod', '-f', '/tmp/welle-io.fifo', '-m', '1', '-F', 'u8'),
+                                 stdin=self.mux.stdout, stdout=subproc.PIPE, stderr=modlog)
 
         # Allow odr-dabmux to receive SIGPIPE if odr-dabmod exits
-        mux.stdout.close()
+        self.mux.stdout.close()
         # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
-        out = mod.communicate()[0]
+        self.mod.communicate()[0]
 
         modlog.close()
         muxlog.close()
 
     def join(self):
         if self.mod != None:
-            logger.info('Waiting for DAB modulator to terminate...')
             self.mod.terminate()
             if self.mod.poll() is None:
                 logger.info('DAB modulator terminated successfully!')
@@ -110,7 +108,6 @@ class ODRServer(threading.Thread):
                 logger.error('Terminating DAB modulator failed. Attempt quitting manually.')
 
         if self.mux != None:
-            logger.info('Waiting for DAB multiplexer to terminate...')
             self.mux.terminate()
             if self.mux.poll() is None:
                 logger.info('DAB modulator terminated successfully!')

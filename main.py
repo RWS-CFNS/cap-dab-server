@@ -16,7 +16,7 @@ import time                         # For sleep support
 from dialog import Dialog           # Beautiful dialogs using the external program dialog
 from cap.server import CAPServer    # CAP server
 from dab.server import DABServer    # DAB server
-from dab.streams import dab_streams # DAB sources
+from dab.streams import DABStreams  # DAB streams
 from dab.odr import ODRMuxConfig    # OpenDigitalRadio server support
 
 # Max path length from limits.h
@@ -112,11 +112,15 @@ def status():
         cap_server = cap.status()
         dab_server, dab_watcher, dab_mux, dab_mod = dab.status()
 
+        sstr = ''
+        for s in streams.status():
+            sstr += f'{s[0]}({s[1]})'
+
         code = d.msgbox(f'''
 CAP HTTP Server     {state(cap_server)}
 DAB Server          {state(dab_server)}
 DAB Watcher         {state(dab_watcher)}
-DAB Streams         {state(False)}
+DAB Streams         {sstr}
 DAB Multiplexer     {state(dab_mux)}
 DAB Modulator       {state(dab_mod)}
 ''',                    colors=True, title='Server Status', no_collapse=True,
@@ -370,7 +374,7 @@ def settings():
              'Maximum size per log file in Kb'),
             ('CAP-DAB Queue limit', 4,  1, config['general']['queuelimit'],   4,  20, 8,  7,        0,
              'Maximum number of CAP messages that can be in the queue at one moment'),
-            ('Stream config',       5,  1, config['dab']['stream_config'],    5,  20, 64, MAX_PATH, 0,
+            ('Streams config',      5,  1, config['dab']['stream_config'],    5,  20, 64, MAX_PATH, 0,
              'streams.ini config file path'),
             ('ODR binaries path',   6,  1, config['dab']['odrbin_path'],      6,  20, 64, MAX_PATH, 0,
              'Directory containing ODR-DabMux, ODR-DabMod, ODR-PadEnc and ODR-AudioEnc'),
@@ -476,7 +480,7 @@ def main_menu():
 
 # Main setup
 def main():
-    global cap, dab
+    global cap, dab, streams
 
     d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
@@ -498,11 +502,10 @@ def main():
         time.sleep(4)
 
     # Start the DAB streams
-    try:
-        d.gauge_update(66, 'Starting DAB streams...', update_text=True)
-        #dab_streams(config)
-    except Exception:
-        d.gauge_update(83, 'Failed to start DAB streams, please check configuration', update_text=True)
+    d.gauge_update(66, 'Starting DAB streams...', update_text=True)
+    streams = DABStreams(config)
+    if not streams.start():
+        d.gauge_update(83, 'Failed to start one or more DAB streams, please check configuration', update_text=True)
         time.sleep(4)
 
     d.gauge_update(100, 'Ready!', update_text=True)
@@ -518,7 +521,7 @@ def main():
 
     # Stop the DAB streams
     d.gauge_update(33, 'Shutting down DAB streams...', update_text=True)
-    # TODO
+    streams.stop()
 
     # Stop the DAB server
     d.gauge_update(66, 'Shutting down DAB server...', update_text=True)
