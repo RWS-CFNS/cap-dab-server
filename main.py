@@ -82,15 +82,23 @@ logger.addHandler(handler)
 
 d = Dialog(dialog='dialog', autowidgetsize=True)
 
-def dab_restart():
-    d.gauge_start('Saving changes, one moment please...', height=6, width=64, percent=0)
-    if dab.restart():
-        d.gauge_update(100, 'Successfully saved!', update_text=True)
+def cap_restart(start=0, target=100):
+    d.gauge_update(start, 'Saving changes to CAP config, one moment please...', update_text=True)
+    if cap.restart():
+        d.gauge_update(target, 'Successfully saved!', update_text=True)
     else:
-        d.gauge_update(33, 'Failed to start DAB server, please refer to the server logs', update_text=True)
+        d.gauge_update(target / 2, 'Failed to start CAP server, please refer to the server logs', update_text=True)
         time.sleep(4)
     time.sleep(0.5)
-    d.gauge_stop()
+
+def dab_restart(start=0, target=100):
+    d.gauge_update(start, 'Saving changes to DAB config, one moment please...', update_text=True)
+    if dab.restart():
+        d.gauge_update(target, 'Successfully saved!', update_text=True)
+    else:
+        d.gauge_update(target / 2, 'Failed to start DAB server, please refer to the server logs', update_text=True)
+        time.sleep(4)
+    time.sleep(0.5)
 
 def status():
     def state(b):
@@ -197,7 +205,10 @@ def ensemble_config():
                           ])
 
         if code == Dialog.EXTRA:
+            d.gauge_start('', height=6, width=64, percent=0)
+            dab.config.write()
             dab_restart()
+            d.gauge_stop()
             break
         if code in (Dialog.CANCEL, Dialog.ESC):
             # restore the old config
@@ -327,7 +338,10 @@ def services_config():
                           ])
 
         if code == Dialog.EXTRA:
+            d.gauge_start('', height=6, width=64, percent=0)
+            dab.config.write()
             dab_restart()
+            d.gauge_stop()
             break
         elif code in (Dialog.CANCEL, Dialog.ESC):
             # restore the old config
@@ -396,7 +410,11 @@ def settings():
             with open(server_config, 'w') as config_file:
                 config.write(config_file)
 
-            # TODO restart server if necessary
+            # Restart the CAP and DAB server to apply changes
+            d.gauge_start('', height=6, width=64, percent=0)
+            cap_restart(0, 50)
+            dab_restart(50, 100)
+            d.gauge_stop()
 
         break
 
