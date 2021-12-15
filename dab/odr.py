@@ -1,6 +1,7 @@
 import configparser                                                 # Python INI file parser
 import copy                                                         # For saving/restoring Config objects
-import os                                                           # For checking if files exist
+import os                                                           # For file I/O
+import stat                                                         # For checking if output is a FIFO
 import logging                                                      # Logging facilities
 import queue                                                        # Queue for passing data to the DAB processing thread
 import subprocess as subproc                                        # Support for starting subprocesses
@@ -16,9 +17,9 @@ class DABWatcher(threading.Thread):
     def __init__(self, config, q):
         threading.Thread.__init__(self)
 
-        self.telnetport = config['dab']['telnetport']
-        self.alarm = config['warning']['alarm']
-        self.replace = config['warning']['replace']
+        self.telnetport = int(config['dab']['telnetport'])
+        self.alarm = config['warning'].getboolean('alarm')
+        self.replace = config['warning'].getboolean('replace')
 
         self.q = q
 
@@ -61,6 +62,7 @@ class DABWatcher(threading.Thread):
                 pass
 
     def join(self):
+        # TODO allow the queue to be emptied first
         self._running = False
         self.q.join()
         super().join()
@@ -74,11 +76,33 @@ class ODRServer(threading.Thread):
         self.binpath = config['dab']['odrbin_path']
         self.muxcfg = config['dab']['mux_config']
         self.modcfg = config['dab']['mod_config']
+        self.output = config['dab']['output']
+
+        self.mux = None
+        self.mod = None
 
     def run(self):
         # TODO rotate this log, this is not so straightforward it appears
         muxlog = open(f'{self.logdir}/dabmux.log', 'ab')
         modlog = open(f'{self.logdir}/dabmod.log', 'ab')
+
+        # check if there's already a file with the same name as our output
+        if os.path.exists(self.output):
+            # if this is a fifo, we don't need to take any action
+            if not stat.S_ISFIFO(os.stat(self.output).st_mode):
+                # otherwise delete the file/dir
+                if os.path.isfile(self.output):
+                    os.remove(self.output)
+                elif os.path.isdir(self.output):
+                    os.rmdir(self.output)
+                else:
+                    raise Exception(f'Unable to remove already existing output path: {self.output}')
+
+                # Create the FIFO that odr-dabmod outputs to
+                os.mkfifo(self.output)
+        else:
+            # Create the FIFO that odr-dabmod outputs to
+            os.mkfifo(self.output)
 
         # Start up odr-dabmux DAB multiplexer
         muxlog.write('\n'.encode('utf-8'))
@@ -86,9 +110,9 @@ class ODRServer(threading.Thread):
 
         # Start up odr-dabmod DAB modulator
         modlog.write('\n'.encode('utf-8'))
-        # TODO load dabmod config
+        # TODO load dabmod config (perhaps by option) / allow manually passing cmdline to odr-dabmod
         #mod = subproc.Popen(('bin/odr-dabmod', self.modcfg), stdin=mux.stdout, stdout=subproc.PIPE, stderr=modlog)
-        self.mod = subproc.Popen((f'{self.binpath}/odr-dabmod', '-f', '/tmp/welle-io.fifo', '-m', '1', '-F', 'u8'),
+        self.mod = subproc.Popen((f'{self.binpath}/odr-dabmod', '-f', self.output, '-m', '1', '-F', 'u8'),
                                  stdin=self.mux.stdout, stdout=subproc.PIPE, stderr=modlog)
 
         # Allow odr-dabmux to receive SIGPIPE if odr-dabmod exits
@@ -100,6 +124,7 @@ class ODRServer(threading.Thread):
         muxlog.close()
 
     def join(self):
+        # Terminate the modulator and multiplexer
         if self.mod != None:
             self.mod.terminate()
             if self.mod.poll() is None:
@@ -114,6 +139,9 @@ class ODRServer(threading.Thread):
             else:
                 logger.error('Terminating DAB multiplexer failed. Attempt quitting manually.')
 
+        # Remove the fifo file that was used as output
+        os.remove(self.output)
+
         super().join()
 
 # ODR-DabMux config file wrapper class
@@ -121,6 +149,8 @@ class ODRMuxConfig():
     def __init__(self, telnetport):
         self.p = BoostInfoParser()
         self.telnetport = telnetport
+
+        self.oldcfg = None
 
     def load(self, cfgfile):
         if cfgfile == None:

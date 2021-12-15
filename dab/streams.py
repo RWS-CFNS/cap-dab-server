@@ -7,6 +7,7 @@ import time                     # For sleep support
 
 logger = logging.getLogger('server.dab')
 
+# This class represents every stream as a thread, defined in streams.ini
 class DABStream(threading.Thread):
     def __init__(self, config, name, index, streamcfg):
         threading.Thread.__init__(self)
@@ -63,21 +64,23 @@ class DABStream(threading.Thread):
         audiolog.close()
         padlog.close()
 
+    # FIXME fix
     def join(self):
         self.audio.terminate()
-        if self.audio.poll() is None:
-            logger.info('good')
-        else:
-            logger.error('bad')
+        #if self.audio.poll() is None:
+        #    pass
+        #else:
+        #    pass
 
         self.pad.terminate()
-        if self.pad.poll() is None:
-            logger.info('good')
-        else:
-            logger.error('bad')
+        #if self.pad.poll() is None:
+        #    pass
+        #else:
+        #    pass
 
         super().join()
 
+# Class that manages individual DAB stream threads
 class DABStreams():
     def __init__(self, config):
         self._srvcfg = config
@@ -111,7 +114,7 @@ class DABStreams():
                 logger.error(f'Unable to start DAB stream "{stream}", check configuration. {e}')
                 ret = False
             except OSError as e:
-                logger.error(f'Unable to start DAB stream "{stream}". Invalid streams config. {e}')
+                logger.error(f'Unable to start DAB stream "{stream}", invalid streams config. {e}')
                 ret = False
             except Exception as e:
                 logger.error(f'Unable to start DAB stream "{stream}". {e}')

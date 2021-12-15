@@ -30,6 +30,8 @@ class DABServer():
         except KeyError as e:
             logger.error(f'Unable to start DAB server thread, check configuration. {e}')
             return False
+        except OSError as e:
+            logger.error(f'Unable to start DAB server thread, check output path. {e}')
         except Exception as e:
             logger.error(f'Unable to start DAB server thread. {e}')
             return False
@@ -44,7 +46,7 @@ class DABServer():
             logger.error(f'Unable to start DAB watcher thread, check configuration. {e}')
             return False
         except OSError as e:
-            logger.error(f'Unable to start DAB watcher thread. Invalid streams config. {e}')
+            logger.error(f'Unable to start DAB watcher thread, invalid streams config. {e}')
             return False
         except Exception as e:
             logger.error(f'Unable to start DAB watcher thread. {e}')
