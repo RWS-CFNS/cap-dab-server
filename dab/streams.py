@@ -12,9 +12,6 @@ class DABStream(threading.Thread):
     def __init__(self, config, name, index, streamcfg):
         threading.Thread.__init__(self)
 
-        self.logdir = config['general']['logdir']
-        self.binpath = config['dab']['odrbin_path']
-
         self.name = name
         self.streamcfg = streamcfg
         self.portrange = (39801, 39898)           # XXX XXX XXX FIXME don't hardcode ports, get from config file
@@ -22,61 +19,99 @@ class DABStream(threading.Thread):
         # Get which output port which should use
         self.port = self.portrange[0] + index
 
-    def run(self):
-        # TODO save log files
-        audiolog = open(f'{self.logdir}/audio-{self.name}.log', 'ab')
-        padlog = open(f'{self.logdir}/pad-{self.name}.log', 'ab')
+        self.streamdir = f'{config["general"]["logdir"]}/streams/{self.name}'
+        self.binpath = config['dab']['odrbin_path']
 
-        # TODO fixme, customized exception
+        self.audio = None
+        self.pad = None
+
+        # Create a directory structure for the stream to save logs to and load DLS and MOT information from
+        os.makedirs(self.streamdir, exist_ok=True)
+        os.makedirs(f'{self.streamdir}/logs', exist_ok=True)
+        if self.streamcfg.getboolean('dls_enable'):
+            open(f'{self.streamdir}/dls.txt', 'a').close()
+        if self.streamcfg.getboolean('mot_enable'):
+            os.makedirs(f'{self.streamdir}/mot', exist_ok=True)
+
+    def run(self):
+        # Check if we have enough ports available in the specified portrange
         if self.port > self.portrange[1]:
-            raise Exception
+            raise Exception('Too many streams running, no more available ports. Check configuration.')
+
+        # If DLS and MOT are disabled, we won't need to start odr-padenc
+        pad = self.streamcfg.getboolean('dls_enable') and self.streamcfg.getboolean('mot_enable')
+
+        # Save our logs (FIXME rotate logs)
+        audiolog = open(f'{self.streamdir}/logs/audioenc.log', 'ab')
+        if pad:
+            padlog = open(f'{self.streamdir}/logs/padenc.log', 'ab')
 
         # Start up odr-audioenc DAB/DAB+ audio encoder
-        # TODO handle dab or dabplus type
-        # TODO set protection
-        audioenc_cmdline = (
+        audioenc_cmdline = [
                             f'{self.binpath}/odr-audioenc',
-                            f'--input={self.streamcfg["input"]}',
-                             '--format=raw',
-                             '--fifo-silence',
                             f'--bitrate={self.streamcfg["bitrate"]}',
                             f'--output=tcp://localhost:{self.port}',
                             f'--pad-socket={self.name}',
                             f'--pad={self.streamcfg["pad_length"]}'
-                           )
+                           ]
+
+        # Set the DAB type
+        if self.streamcfg['output_type'] == 'dab':
+            audioenc_cmdline.append('--dab')
+
+        # Add the input to cmdline
+        if self.streamcfg['input_type'] == 'gst':
+            audioenc_cmdline.append(f'--gst-uri={self.streamcfg["input"]}')
+        elif self.streamcfg['input_type'] == 'fifo':
+            audioenc_cmdline.append(f'--input={self.streamcfg["input"]}')
+            audioenc_cmdline.append('--format=raw')
+            audioenc_cmdline.append('--fifo-silence')
+
         self.audio = subproc.Popen(audioenc_cmdline, stdout=audiolog, stderr=audiolog)
 
         # Start up odr-padenc PAD encoder
-        padenc_cmdline = (
-                          f'{self.binpath}/odr-padenc',
-                          f'--dls={self.streamcfg["dls_file"]}',
-                          f'--dir={self.streamcfg["mot_dir"]}',
-                          f'--output={self.name}',
-                          f'--sleep={self.streamcfg["mot_timeout"]}'
-                         )
-        self.pad = subproc.Popen(padenc_cmdline, stdout=padlog, stderr=padlog)
+        if pad:
+            padenc_cmdline = [
+                              f'{self.binpath}/odr-padenc',
+                              f'--output={self.name}'
+                             ]
+
+            # Add DLS and MOT if enabled
+            if self.streamcfg.getboolean('dls_enable'):
+                padenc_cmdline.append(f'--dls={self.streamdir}/dls.txt')
+            if self.streamcfg.getboolean('mot_enable'):
+                padenc_cmdline.append(f'--dir={self.streamdir}/mot')
+                padenc_cmdline.append(f'--sleep={self.streamcfg["mot_timeout"]}')
+
+            self.pad = subproc.Popen(padenc_cmdline, stdout=padlog, stderr=padlog)
 
         # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
         #out = mod.communicate()[0]
         self.audio.communicate()[0]
-        self.pad.communicate()[0]
+        if pad:
+            self.pad.communicate()[0]
 
         audiolog.close()
-        padlog.close()
+        if pad:
+            padlog.close()
 
     # FIXME fix
     def join(self):
-        self.audio.terminate()
+        if self.audio != None:
+            self.audio.terminate()
         #if self.audio.poll() is None:
         #    pass
         #else:
         #    pass
 
-        self.pad.terminate()
+        if self.pad != None:
+            self.pad.terminate()
         #if self.pad.poll() is None:
         #    pass
         #else:
         #    pass
+
+        # TODO consider deleting the stream directory structure on exiting the thread (or at least add an option in settings)
 
         super().join()
 

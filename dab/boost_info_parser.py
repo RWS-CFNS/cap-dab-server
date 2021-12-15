@@ -65,16 +65,14 @@ class BoostInfoTree(object):
     def __getitem__(self, key):
         try:
             assert self.subTrees[key][0]
-        except KeyError:
+        except (KeyError, AssertionError):
             self.__setitem__(key, None)
 
         tree = self.subTrees[key][0]
         if tree.value != None and len(tree.value) > 0:
             return tree.value
-        elif len(tree) > 0:
-            return tree
         else:
-            return ''
+            return tree
     def __getattr__(self, key):
         if key in ('subTrees', 'value', 'parent', 'lastChild'):
             return object.__getattr__(self, key)

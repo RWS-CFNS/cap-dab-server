@@ -170,12 +170,15 @@ These values both represent a hexidecimal value.
 
             return (f'0x{elems[0]}', None if elems[1] == '' else f'0x{elems[1]}')
         else:
-            return (None, None)
+            return (Dialog.CANCEL, Dialog.CANCEL)
 
 # Label and short label renaming menu, used for both ensemble and DAB services configuration
 def label_config(title, label, shortlabel):
-    print(label)
-    print(shortlabel)
+    if not isinstance(label, str):
+        label = ''
+    if not isinstance(shortlabel, str):
+        shortlabel = ''
+
     while True:
         code, elems = d.form('''
 \ZbLabel\Zn cannot be longer than 16 characters.
@@ -195,7 +198,7 @@ def label_config(title, label, shortlabel):
                 error('\ZbShort Label\Zn must contain characters from \ZbLabel\Zn.')
                 continue
 
-        return (None, None)
+        return (Dialog.CANCEL, Dialog.CANCEL)
 
 def ensemble_config():
     TITLE = 'DAB Ensemble Configuration'
@@ -227,20 +230,22 @@ def ensemble_config():
         elif tag == 'Country':
             cid, ecc = country_config(TITLE, dab.config.cfg.ensemble['id'], dab.config.cfg.ensemble['ecc'])
 
-            if cid != None and ecc != None:
-                dab.config.cfg.ensemble['id'] = cid
-                dab.config.cfg.ensemble['ecc'] = ecc
+            if cid != Dialog.CANCEL:
+                if cid != None and ecc != None:
+                    dab.config.cfg.ensemble['id'] = cid
+                    dab.config.cfg.ensemble['ecc'] = ecc
         elif tag == 'Label':
             label, shortlabel = label_config(TITLE, dab.config.cfg.ensemble['label'], dab.config.cfg.ensemble['shortlabel'])
 
-            if label != None and shortlabel != None:
-                dab.config.cfg.ensemble['label'] = label
-                dab.config.cfg.ensemble['shortlabel'] = shortlabel
+            if label != Dialog.CANCEL:
+                if label != None and shortlabel != None:
+                    dab.config.cfg.ensemble['label'] = label
+                    dab.config.cfg.ensemble['shortlabel'] = shortlabel
         elif tag == 'Announcements':
             announcements()
 
 def services_config():
-    TITLE = 'DAB Service Configuration'
+    TITLE = 'Services - DAB Service Configuration'
 
     def services():
         def modify(service):
@@ -268,24 +273,26 @@ def services_config():
 
                     # TODO check if Service ID is already in use
 
-                    if sid != None:
-                        dab.config.cfg.services[service]['id'] = sid
+                    if cid != Dialog.CANCEL:
+                        if sid != None:
+                            dab.config.cfg.services[service]['id'] = sid
 
-                    if ecc != None:
-                        dab.config.cfg.services[service]['ecc'] = ecc
-                    else:
-                        del dab.config.cfg.services[service]['ecc']
+                        if ecc != None:
+                            dab.config.cfg.services[service]['ecc'] = ecc
+                        else:
+                            del dab.config.cfg.services[service]['ecc']
                 elif tag == 'Label':
                     label, shortlabel = label_config(TITLE,
                                                      dab.config.cfg.services[service]['label'],
                                                      dab.config.cfg.services[service]['shortlabel'])
 
-                    if label != None:
-                        dab.config.cfg.services[service]['label'] = label
-                    if shortlabel != None:
-                        dab.config.cfg.services[service]['shortlabel'] = shortlabel
-                    else:
-                        del dab.config.cfg.services[service]['shortlabel']
+                    if label != Dialog.CANCEL:
+                        if label != None:
+                            dab.config.cfg.services[service]['label'] = label
+                        if shortlabel != None:
+                            dab.config.cfg.services[service]['shortlabel'] = shortlabel
+                        else:
+                            del dab.config.cfg.services[service]['shortlabel']
                 elif tag == 'Programme Type':
                     # TODO implement
                     pass
@@ -295,9 +302,15 @@ def services_config():
 
         def add():
             while True:
-                code, string = d.inputbox('Please enter a new identifier/name for this service (no spaces)')
-                if ' ' in string:
-                    error('String cannot contain spaces.')
+                code, string = d.inputbox('Please enter a new identifier/name for this service (no spaces)',
+                                          title=f'Add service - {TITLE}')
+
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    break
+                elif string == '':
+                    error('Identifier cannot be empty.')
+                elif ' ' in string:
+                    error('Identifier cannot contain spaces.')
                 else:
                     dab.config.cfg.services[string]
                     modify(string)
@@ -309,7 +322,11 @@ def services_config():
             # Load in services from multiplexer config
             i = 0
             for key, value in dab.config.cfg.services:
-                menu.insert(i, (key, dab.config.cfg.services[key]['label']))
+                label = dab.config.cfg.services[key]['label']
+                if not isinstance(label, str):
+                    label = ''
+
+                menu.insert(i, (key, label))
                 i += 1
 
             code, tag = d.menu('Please select a service', title=TITLE, cancel_label='Back', choices=menu)
@@ -322,10 +339,12 @@ def services_config():
                 modify(tag)
 
     def streams():
+        #code, tags = d.menu('', title={Stream
         pass
 
     def warning_config():
-        code, tags = d.checklist('Select the method by which you want the server to send DAB warning messages', choices=[
+        code, tags = d.checklist('Select the method by which you want the server to send DAB warning messages',
+                                 title=f'Warning method - {TITLE}', choices=[
                    ('Alarm',    'DAB native Alarm announcement', config['warning'].getboolean('alarm')),
                    ('Replace',  'Channel stream replacement', config['warning'].getboolean('replace'))
                    ])
@@ -344,8 +363,7 @@ def services_config():
     while True:
         code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
                           ('Services',          'Add/Modify services'),
-                          ('Subchannels',       'Add/Modify subchannels'),
-                          ('Streams',           'Add/Modify/Set the service stream source'),
+                          ('Streams',           'Add/Modify/Set the service streams/subchannels'),
                           ('Warning method',    'Set the method by which warning messages are sent'),
                           ('Announcements',     'Manually trigger announcements on a service')
                           ])
@@ -363,7 +381,7 @@ def services_config():
         elif tag == 'Services':
             services()
         elif tag == 'Subchannels':
-            services()
+            subchannels()
         elif tag == 'Streams':
             streams()
         elif tag == 'Warning method':
@@ -468,14 +486,14 @@ def log():
 
 def main_menu():
     while True:
-        code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', ok_label='Select', no_cancel=True, choices=
-                          [( 'Status',      'View the server status')] +
-                          [('Ensemble',    'Configure DAB ensemble')] +
-                          [('Services',    'Configure DAB services and subchannels')] +
-                          [( 'Settings',    'Configure general server settings')] +
-                          [( 'Logs',        'View the server logs')] +
-                          [( 'Quit',        'Stop the server and quit the admin interface')]
-                          )
+        code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', ok_label='Select', no_cancel=True, choices=[
+                          ( 'Status',      'View the server status'),
+                          ( 'Ensemble',    'Configure DAB ensemble'),
+                          ( 'Services',    'Configure DAB services and streams/subchannels'),
+                          ( 'Settings',    'Configure general server settings'),
+                          ( 'Logs',        'View the server logs'),
+                          ( 'Quit',        'Stop the server and quit the admin interface')
+                          ])
 
         if code == Dialog.ESC or tag == 'Quit':
             break

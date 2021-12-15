@@ -38,3 +38,4 @@ TODO
 - [ ] GUI config - Subchannels
 - [ ] GUI config - Stream
 - [ ] Settings - CAP identity
+- [ ] Logging - Add stream logs to GUI
