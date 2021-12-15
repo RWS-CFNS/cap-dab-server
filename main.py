@@ -108,23 +108,28 @@ def status():
         else:
             return '\Zb\Z1STOPPED\Zn'
 
-    # TODO interface with the DABServer class to obtain the mux and mod status
     while True:
         cap_server = cap.status()
         dab_server, dab_watcher, dab_mux, dab_mod = dab.status()
 
-        sstr = ''
-        for s in streams.status():
-            sstr += f'{s[0]}({s[1]})'
+        # Query the state of the various subcomponents
+        states = [
+            ['CAP HTTP Server', state(cap_server)],
+            ['DAB Server',      state(dab_server)],
+            ['DAB Streams',     ''],
+            ['DAB Multiplexer', state(dab_mux)],
+            ['DAB Modulator',   state(dab_mod)]
+        ]
 
-        code = d.msgbox(f'''
-CAP HTTP Server     {state(cap_server)}
-DAB Server          {state(dab_server)}
-DAB Watcher         {state(dab_watcher)}
-DAB Streams         {sstr}
-DAB Multiplexer     {state(dab_mux)}
-DAB Modulator       {state(dab_mod)}
-''',                    colors=True, title='Server Status', no_collapse=True,
+        # Insert the state of DAB Streams in separate rows (after 'DAB Streams')
+        for s in streams.status():
+            states.insert(3, [f'  - {s[0]}', state(s[1])])
+
+        sstr = ''
+        for s in states:
+            sstr += '{: <20}{: <6}\n'.format(*s)
+
+        code = d.msgbox(sstr, colors=True, title='Server Status', no_collapse=True,
                         ok_label='Refresh', extra_button=True, extra_label='Exit')
 
         if code in (Dialog.EXTRA, Dialog.ESC):
