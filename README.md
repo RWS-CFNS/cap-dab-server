@@ -27,13 +27,13 @@ TODO
 TODO
 
 # TODO
-[] Automatically create fifo
-[] Stream class
-[] Stream management
-[] TTS
-[] Manual announcement triggering
-[] GUI config - Ensemble announcement
-[] GUI config - Service PTY and Announcement
-[] GUI config - Subchannels
-[] GUI config - Stream
-[] Settings - CAP identity
+- [x] Automatically create fifo
+- [x] Stream class
+- [x] Stream management
+- [ ] TTS
+- [ ] Manual announcement triggering
+- [ ] GUI config - Ensemble announcement
+- [ ] GUI config - Service PTY and Announcement
+- [ ] GUI config - Subchannels
+- [ ] GUI config - Stream
+- [ ] Settings - CAP identity
