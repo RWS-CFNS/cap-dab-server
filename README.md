@@ -1,6 +1,6 @@
-cap-dab-server is a piece of software that combines exisiting technologies (mainly
-ODR-DabMux and ODR-DabMod) into a solution capable of translating CAP (Common
-Alerting Protocol) messages into a DAB/DAB+ warning broadcast.
+cap-dab-server is a piece of software that combines exisiting technologies
+(ODR-mmbTools) into a solution capable of translating CAP (Common
+Alerting Protocol) messages to a DAB/DAB+ emergency warning broadcast.
 
 Features include:
 - A TUI management interface to view status, logs and configure general settings
@@ -30,6 +30,7 @@ TODO
 - [x] Automatically create fifo
 - [x] Stream class
 - [x] Stream management
+- [ ] Implement stream replacement without use of external scripts
 - [ ] TTS
 - [ ] Manual announcement triggering
 - [ ] GUI config - Ensemble announcement
