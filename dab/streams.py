@@ -39,11 +39,11 @@ class DABStream(threading.Thread):
             raise Exception('Too many streams running, no more available ports. Check configuration.')
 
         # If DLS and MOT are disabled, we won't need to start odr-padenc
-        pad = self.streamcfg.getboolean('dls_enable') and self.streamcfg.getboolean('mot_enable')
+        pad_enable = self.streamcfg.getboolean('dls_enable') and self.streamcfg.getboolean('mot_enable')
 
         # Save our logs (FIXME rotate logs)
         audiolog = open(f'{self.streamdir}/logs/audioenc.log', 'ab')
-        if pad:
+        if pad_enable:
             padlog = open(f'{self.streamdir}/logs/padenc.log', 'ab')
 
         # Start up odr-audioenc DAB/DAB+ audio encoder
@@ -63,14 +63,17 @@ class DABStream(threading.Thread):
         if self.streamcfg['input_type'] == 'gst':
             audioenc_cmdline.append(f'--gst-uri={self.streamcfg["input"]}')
         elif self.streamcfg['input_type'] == 'fifo':
-            audioenc_cmdline.append(f'--input={self.streamcfg["input"]}')
+            audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
             audioenc_cmdline.append('--format=raw')
             audioenc_cmdline.append('--fifo-silence')
+        elif self.streamcfg['input_type'] == 'file':
+            audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
+            audioenc_cmdline.append('--format=wav')
 
         self.audio = subproc.Popen(audioenc_cmdline, stdout=audiolog, stderr=audiolog)
 
         # Start up odr-padenc PAD encoder
-        if pad:
+        if pad_enable:
             padenc_cmdline = [
                               f'{self.binpath}/odr-padenc',
                               f'--output={self.name}'
@@ -85,18 +88,22 @@ class DABStream(threading.Thread):
 
             self.pad = subproc.Popen(padenc_cmdline, stdout=padlog, stderr=padlog)
 
+        # TODO quit odr-audioenc if odr-padenc exists
+
         # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
-        #out = mod.communicate()[0]
         self.audio.communicate()[0]
-        if pad:
+        if pad_enable:
             self.pad.communicate()[0]
 
         audiolog.close()
-        if pad:
+        if pad_enable:
             padlog.close()
 
-    # FIXME fix
+    # TODO log termination
     def join(self):
+        if not self.is_alive():
+            return
+
         if self.audio != None:
             self.audio.terminate()
         #if self.audio.poll() is None:
@@ -123,6 +130,25 @@ class DABStreams():
         self._streamscfg = None
         self._streams = []
 
+    def _start_stream(self, stream, index, cfg):
+        logger.info(f'Starting up DAB stream {stream}...')
+
+        try:
+            thread = DABStream(self._srvcfg, stream, index, cfg)
+            thread.start()
+            self._streams.insert(index, (stream, thread))
+        except KeyError as e:
+            logger.error(f'Unable to start DAB stream "{stream}", check configuration. {e}')
+            return False
+        except OSError as e:
+            logger.error(f'Unable to start DAB stream "{stream}", invalid streams config. {e}')
+            return False
+        except Exception as e:
+            logger.error(f'Unable to start DAB stream "{stream}". {e}')
+            return False
+
+        return True
+
     def start(self):
         # Load streams configuration into memory
         cfgfile = self._srvcfg['dab']['stream_config']
@@ -138,24 +164,29 @@ class DABStreams():
         i = 0
         ret = True
         for stream in self._streamscfg.sections():
-            logger.info(f'Starting up DAB stream {stream}...')
-
-            try:
-                thread = DABStream(self._srvcfg, stream, i, self._streamscfg[stream])
-                thread.start()
-                self._streams.append((stream, thread))
+            if self._start_stream(stream, i, self._streamscfg[stream]):
                 i += 1
-            except KeyError as e:
-                logger.error(f'Unable to start DAB stream "{stream}", check configuration. {e}')
-                ret = False
-            except OSError as e:
-                logger.error(f'Unable to start DAB stream "{stream}", invalid streams config. {e}')
-                ret = False
-            except Exception as e:
-                logger.error(f'Unable to start DAB stream "{stream}". {e}')
+            else:
                 ret = False
 
         return ret
+
+    def chreplace(self, stream, newcfg):
+        i = 0
+        for s, t in self._streams:
+            if s == stream:
+                # Stop the old stream
+                t.join()
+                del self._streams[i]
+
+                # Allow sockets some time to unbind (FIXME needed?)
+                time.sleep(4)
+
+                # And fire up the new one
+                return self._start_stream(stream, i, newcfg)
+
+            i += 1
+
 
     def stop(self):
         if self._streamscfg == None:

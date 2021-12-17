@@ -160,4 +160,7 @@ class CAPServer():
         return self.start()
 
     def status(self):
+        if self._cap == None:
+            return False
+
         return self._cap.is_alive()

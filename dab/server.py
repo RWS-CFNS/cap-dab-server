@@ -6,9 +6,10 @@ import time                                 # For sleep support
 logger = logging.getLogger('server.dab')
 
 class DABServer():
-    def __init__(self, config, q):
+    def __init__(self, config, q, streams):
         self._srvcfg = config
         self._q = q
+        self._streams = streams
 
         self._odr = None
         self._watcher = None
@@ -32,6 +33,7 @@ class DABServer():
             return False
         except OSError as e:
             logger.error(f'Unable to start DAB server thread, check output path. {e}')
+            return False
         except Exception as e:
             logger.error(f'Unable to start DAB server thread. {e}')
             return False
@@ -40,7 +42,7 @@ class DABServer():
 
         # Start a watcher thread to process messages from the CAPServer
         try:
-            self._watcher = DABWatcher(self._srvcfg, self._q)
+            self._watcher = DABWatcher(self._srvcfg, self._q, self._streams)
             self._watcher.start()
         except KeyError as e:
             logger.error(f'Unable to start DAB watcher thread, check configuration. {e}')
@@ -84,8 +86,8 @@ class DABServer():
         if self.config == None:
             return (False, False, False, False)
 
-        server = self._odr.is_alive()
-        watcher = self._watcher.is_alive()
+        server = self._odr.is_alive() if self._odr != None else False
+        watcher = self._watcher.is_alive() if self._watcher != None else False
         # FIXME check these properly
         mux = subprocess.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0
         mod = subprocess.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0

@@ -12,9 +12,14 @@ Features include:
 
 # Installation
 Requirements:
+- odr-audioenc (DAB/DAB+ Encoder)
+- odr-padenc (DAB PAD Encoder)
+- odr-dabmux (DAB Multiplexer)
+- odr-dabmod (DAB Modulator)
 - dialog (TUI)
 - Python 3.9+
 - python-pyttsx3 (TTS)
+- python-pydub (Convert mp3 TTS output to wav)
 - python-pythondialog (TUI)
 - python-Flask (HTTP server)
 

@@ -48,7 +48,7 @@ else:
                         }
     config['dab'] =     {
                          'stream_config': f'{CONFIG_HOME}/cap-dab-server/streams.ini',
-                         'odrbin_path': f'{sys.path[0]}/bin',
+                         'odrbin_path': f'/usr/local/bin',
                          'mux_config': f'{CONFIG_HOME}/cap-dab-server/dabmux.mux',
                          'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini',
                          'telnetport': '39899',
@@ -68,8 +68,8 @@ else:
         config.write(config_file)
 
 # Create directories if they didn't exist yet
-os.makedirs(os.path.dirname(config['general']['logdir']), exist_ok=True)
-os.makedirs(os.path.dirname(config['dab']['odrbin_path']), exist_ok=True)
+os.makedirs(config['general']['logdir'], exist_ok=True)
+os.makedirs(config['dab']['odrbin_path'], exist_ok=True)
 os.makedirs(os.path.dirname(config['dab']['mux_config']), exist_ok=True)
 os.makedirs(os.path.dirname(config['dab']['mod_config']), exist_ok=True)
 
@@ -88,7 +88,7 @@ def cap_restart(start=0, target=100):
     if cap.restart():
         d.gauge_update(target, 'Successfully saved!', update_text=True)
     else:
-        d.gauge_update(target / 2, 'Failed to start CAP server, please refer to the server logs', update_text=True)
+        d.gauge_update(int(target / 2), 'Failed to start CAP server, please refer to the server logs', update_text=True)
         time.sleep(4)
     time.sleep(0.5)
 
@@ -97,7 +97,7 @@ def dab_restart(start=0, target=100):
     if dab.restart():
         d.gauge_update(target, 'Successfully saved!', update_text=True)
     else:
-        d.gauge_update(target / 2, 'Failed to start DAB server, please refer to the server logs', update_text=True)
+        d.gauge_update(int(target / 2), 'Failed to start DAB server, please refer to the server logs', update_text=True)
         time.sleep(4)
     time.sleep(0.5)
 
@@ -125,6 +125,7 @@ def status():
         for s in streams.status():
             states.insert(3, [f'  - {s[0]}', state(s[1])])
 
+        # Format the states list into columns
         sstr = ''
         for s in states:
             sstr += '{: <20}{: <6}\n'.format(*s)
@@ -463,6 +464,12 @@ def logbox(file):
             break
 
 def log():
+    def viewlog(path):
+        # Create the log file if it doesn't exist yet
+        open(path, 'a').close()
+
+        logbox(path)
+
     while True:
         code, tag = d.menu('', title='Server log management', ok_label='Select', cancel_label='Back', choices=[
                           ('Server',        'View main server log'),
@@ -476,13 +483,16 @@ def log():
         if code in (Dialog.CANCEL, Dialog.ESC):
             break
         elif tag == 'Server':
-            logbox(f'{logdir}/server.log')
+            viewlog(f'{logdir}/server.log')
         elif tag == 'CAP':
-            logbox(f'{logdir}/capsrv.log')
+            viewlog(f'{logdir}/capsrv.log')
         elif tag == 'Multiplexer':
-            logbox(f'{logdir}/dabmux.log')
+            viewlog(f'{logdir}/dabmux.log')
         elif tag == 'Modulator':
-            logbox(f'{logdir}/dabmod.log')
+            viewlog(f'{logdir}/dabmod.log')
+
+def restart():
+    pass
 
 def main_menu():
     while True:
@@ -492,6 +502,7 @@ def main_menu():
                           ( 'Services',    'Configure DAB services and streams/subchannels'),
                           ( 'Settings',    'Configure general server settings'),
                           ( 'Logs',        'View the server logs'),
+                          ( 'Restart',     'Restart one or more server components'),
                           ( 'Quit',        'Stop the server and quit the admin interface')
                           ])
 
@@ -505,6 +516,8 @@ def main_menu():
             services_config()
         elif tag == 'Settings':
             settings()
+        elif tag == 'Restart':
+            restart()
         elif tag == 'Logs':
             log()
 
@@ -524,18 +537,18 @@ def main():
         d.gauge_update(17, 'Failed to start CAP server, please refer to the server logs', update_text=True)
         time.sleep(4)
 
-    # Start the DAB server
-    d.gauge_update(33, 'Starting DAB server...', update_text=True)
-    dab = DABServer(config, q)
-    if not dab.start():
-        d.gauge_update(50, 'Failed to start DAB server, please refer to the server logs', update_text=True)
-        time.sleep(4)
-
     # Start the DAB streams
-    d.gauge_update(66, 'Starting DAB streams...', update_text=True)
+    d.gauge_update(33, 'Starting DAB streams...', update_text=True)
     streams = DABStreams(config)
     if not streams.start():
-        d.gauge_update(83, 'Failed to start one or more DAB streams, please check configuration', update_text=True)
+        d.gauge_update(50, 'Failed to start one or more DAB streams, please check configuration', update_text=True)
+        time.sleep(4)
+
+    # Start the DAB server
+    d.gauge_update(66, 'Starting DAB server...', update_text=True)
+    dab = DABServer(config, q, streams)
+    if not dab.start():
+        d.gauge_update(83, 'Failed to start DAB server, please refer to the server logs', update_text=True)
         time.sleep(4)
 
     d.gauge_update(100, 'Ready!', update_text=True)

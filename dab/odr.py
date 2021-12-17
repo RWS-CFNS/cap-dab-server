@@ -3,6 +3,8 @@ import copy                                                         # For saving
 import os                                                           # For file I/O
 import stat                                                         # For checking if output is a FIFO
 import logging                                                      # Logging facilities
+import pydub                                                        # For converting TTS mp3 output to wav
+import pyttsx3                                                      # Text To Speech engine frontend
 import queue                                                        # Queue for passing data to the DAB processing thread
 import subprocess as subproc                                        # Support for starting subprocesses
 import telnetlib                                                    # For signalling (alarm) announcements from DABWatcher
@@ -14,47 +16,82 @@ logger = logging.getLogger('server.dab')
 # DAB queue watcher and message processing
 # This thread handles messages received from the CAPServer
 class DABWatcher(threading.Thread):
-    def __init__(self, config, q):
+    def __init__(self, config, q, streams):
         threading.Thread.__init__(self)
 
         self.telnetport = int(config['dab']['telnetport'])
         self.alarm = config['warning'].getboolean('alarm')
         self.replace = config['warning'].getboolean('replace')
 
+        self.alarmpath = f'{config["general"]["logdir"]}/streams/sub-alarm'
+
         self.q = q
+        self.streams = streams
 
         # Load in streams.ini
         stream_config = config['dab']['stream_config']
         os.makedirs(os.path.dirname(stream_config), exist_ok=True)
-        self.config = configparser.ConfigParser()
+        self.streamscfg = configparser.ConfigParser()
         if os.path.isfile(stream_config):
-            self.config.read(stream_config)
+            self.streamscfg.read(stream_config)
         else:
             logger.error(f'Invalid file: {stream_config}. Unable to start DAB watcher thread')
             raise OSError.FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), stream_config)
 
-        #with open(stream_config, 'w') as config_file:
-            #config.write(config_file)
+        self.tts = pyttsx3.init()
 
         self._running = True
 
     def run(self):
-        # main a list of currently active announcements with their expiry date
+        # Main a list of currently active announcements with their expiry date
         announcements = []
+
+        alarmpath = '/Users/bastiaan/.cache/cap-dab-server/streams/sub-alarm'
 
         while self._running:
             try:
                 # Wait for a message from the CAPServer
-                lang, effective, expires, description = self.q.get(block=True, timeout=4)
-                logger.info(lang + effective + expires + description)
+                lang, effective, expires, description = self.q.get(block=True, timeout=2)
+                logger.info(f'CAP message: lang - effective - expires - description') # TODO put in CAPServer
+
+                # Generate TTS output from the description
+                # TODO look for the right language
+                # FIXME handle conditions where the conversion fails
+                # TODO use ffmpeg directly instead of pydub, pydub is kinda finicky
+                #mp3 = f'{self.alarmpath}/tts.mp3'
+                #self.tts.setProperty('voice', 'com.apple.speech.synthesis.voice.xander')
+                #self.tts.save_to_file(description, mp3)
+                #self.tts.runAndWait()
+                #seg = pydub.AudioSegment.from_mp3(mp3)
+                #seg.export(f'{self.alarmpath}/tts.wav', format='wav')
 
                 if self.alarm:
-                    # signal the alarm announcement
+                    # Signal the alarm announcement
                     # TODO start later if effective is later than current time
                     with telnetlib.Telnet('localhost', self.telnetport) as t:
                         t.write(b'set alarm active 1\n')
 
                 if self.replace:
+                    # Skip services that don't have the Alarm announcement enabled # TODO mention this in the GUI
+
+                    # Modify the stream config in memory so all streams correspond to the alarm stream
+                    for stream in self.streamscfg.sections():
+                        #self.streamscfg[stream]['input_type'] = 'file'
+                        #self.streamscfg[stream]['input'] = '../sub-alarm/tts.wav'
+                        self.streamscfg[stream]['input_type'] = 'gst'
+                        self.streamscfg[stream]['input'] = 'http://127.0.0.1:1235'
+
+                        self.streamscfg[stream]['dls_enable'] = 'yes'
+                        self.streamscfg[stream]['mot_enable'] = 'no'
+
+                        # FIXME find services via component config!
+                        with telnetlib.Telnet('localhost', self.telnetport) as t:
+                            t.write(b'set srv-audio label NL-Alert,NL-Alert\n')
+                            t.write(b'set srv-audio pty 3\n')
+
+                        # Then, restart all modified streams
+                        self.streams.chreplace(stream, self.streamscfg[stream])
+
                     #replace all streams with the one from sub-alarm
                     #replace all service labels, pty with the ones from srv-alarm
                     pass
@@ -62,6 +99,9 @@ class DABWatcher(threading.Thread):
                 pass
 
     def join(self):
+        if not self.is_alive():
+            return
+
         # TODO allow the queue to be emptied first
         self._running = False
         self.q.join()
@@ -80,6 +120,21 @@ class ODRServer(threading.Thread):
 
         self.mux = None
         self.mod = None
+
+        # Check if ODR-DabMux and ODR-DabMod are available
+        muxbin = f'{self.binpath}/odr-dabmux'
+        if not os.path.isfile(muxbin):
+            raise Exception(f'Invalid path to DAB Multiplexer binary: {muxbin}')
+
+        modbin = f'{self.binpath}/odr-dabmod'
+        if not os.path.isfile(modbin):
+            raise Exception(f'Invalid path to DAB Modulator binary: {modbin}')
+
+        if os.name == 'posix':
+            if not os.access(muxbin, os.X_OK):
+                raise Exception(f'DAB Multiplexer binary not executable: {muxbin}')
+            if not os.access(modbin, os.X_OK):
+                raise Exception(f'DAB Modulator binary not executable: {modbin}')
 
     def run(self):
         # TODO rotate this log, this is not so straightforward it appears
@@ -124,6 +179,9 @@ class ODRServer(threading.Thread):
         muxlog.close()
 
     def join(self):
+        if not self.is_alive():
+            return
+
         # Terminate the modulator and multiplexer
         if self.mod != None:
             self.mod.terminate()
@@ -202,29 +260,29 @@ class ODRMuxConfig():
         self.cfg.ensemble.announcements.alarm.flags['Alarm'] = 'true'
         self.cfg.ensemble.announcements.alarm['subchannel'] = 'sub-alarm'
 
-        root.services['srv-alarm']['id'] = '0x8AAA'
-        root.services['srv-alarm']['label'] = 'Alarm announcement'
-        root.services['srv-alarm']['shortlabel'] = 'Alarm'
-        root.services['srv-alarm']['pty'] = '3'
-        root.services['srv-alarm']['pty-sd'] = 'static'
-        root.services['srv-alarm']['announcements']['Alarm'] = 'true'
-        root.services['srv-alarm']['announcements']['clusters'] = '1'
+        self.cfg.services['srv-alarm']['id'] = '0x8AAA'
+        self.cfg.services['srv-alarm']['label'] = 'Alarm announcement'
+        self.cfg.services['srv-alarm']['shortlabel'] = 'Alarm'
+        self.cfg.services['srv-alarm']['pty'] = '3'
+        self.cfg.services['srv-alarm']['pty-sd'] = 'static'
+        self.cfg.services['srv-alarm']['announcements']['Alarm'] = 'true'
+        self.cfg.services['srv-alarm']['announcements']['clusters'] = '1'
 
         # FIXME generate subchannel on the fly based on streams.ini
-        root.subchannels['sub-alarm']['type'] = 'dabplus'
-        root.subchannels['sub-alarm']['bitrate'] = '96'
-        root.subchannels['sub-alarm']['id'] = '1'
-        root.subchannels['sub-alarm']['protection-profile'] = 'EEP_A'
-        root.subchannels['sub-alarm']['protection'] = '3'
-        root.subchannels['sub-alarm']['inputproto'] = 'zmq'
-        root.subchannels['sub-alarm']['inputuri'] = 'tcp://*:39801'
-        root.subchannels['sub-alarm']['zmq-buffer'] = '40'
-        root.subchannels['sub-alarm']['zmq-prebuffering'] = '20'
+        self.cfg.subchannels['sub-alarm']['type'] = 'dabplus'
+        self.cfg.subchannels['sub-alarm']['bitrate'] = '96'
+        self.cfg.subchannels['sub-alarm']['id'] = '1'
+        self.cfg.subchannels['sub-alarm']['protection-profile'] = 'EEP_A'
+        self.cfg.subchannels['sub-alarm']['protection'] = '3'
+        self.cfg.subchannels['sub-alarm']['inputproto'] = 'zmq'
+        self.cfg.subchannels['sub-alarm']['inputuri'] = 'tcp://*:39801'
+        self.cfg.subchannels['sub-alarm']['zmq-buffer'] = '40'
+        self.cfg.subchannels['sub-alarm']['zmq-prebuffering'] = '20'
 
-        root.components['comp-alarm']['type'] = '2'                                 # Type 2 = multi-channel
-        root.components['comp-alarm']['service'] = 'srv-alarm'
-        root.components['comp-alarm']['subchannel'] = 'sub-alarm'
-        root.components['comp-alarm']['user-applications']['userapp'] = 'slideshow' # Enable MOT slideshow
+        self.cfg.components['comp-alarm']['type'] = '2'                                 # Type 2 = multi-channel
+        self.cfg.components['comp-alarm']['service'] = 'srv-alarm'
+        self.cfg.components['comp-alarm']['subchannel'] = 'sub-alarm'
+        self.cfg.components['comp-alarm']['user-applications']['userapp'] = 'slideshow' # Enable MOT slideshow
 
         # Output to stdout because we'll be piping the output into ODR-DabMux
         self.cfg.outputs['stdout'] = 'fifo:///dev/stdout?type=raw'
