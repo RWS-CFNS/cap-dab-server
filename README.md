@@ -46,3 +46,10 @@ TODO
 - [ ] GUI config - Stream
 - [ ] Settings - CAP identity
 - [ ] Logging - Add stream logs to GUI
+
+# License
+
+Credits to [OpenDigitalRadio](http://www.opendigitalradio.org/) for the
+excellent open-source ODR-mmbTools DAB/DAB+ software tools.
+
+Credit to Adeola Bannis of the University of California for [BoostInfoParser](https://gist.github.com/thecodemaiden/dc4e4e4a54eaa5f0be84).

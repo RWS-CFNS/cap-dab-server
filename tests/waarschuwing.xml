@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
 	<identifier>demoAdapter.5362.Alert.5362</identifier>
-	<sender>public-warning-portal@one2many.eu</sender>
+	<sender>public-warning-portal@localhost</sender>
 	<sent>2019-06-24T13:45:06+02:00</sent>
 	<status>Actual</status>
 	<msgType>Alert</msgType>

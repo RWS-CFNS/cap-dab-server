@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
 	<identifier>demoAdapter.5364.Cancel.5363</identifier>
-	<sender>public-warning-portal@one2many.eu</sender>
+	<sender>public-warning-portal@localhost</sender>
 	<sent>2019-06-24T13:52:58+02:00</sent>
 	<status>Actual</status>
 	<msgType>Cancel</msgType>
 	<scope>Public</scope>
-	<references>public-warning-portal@one2many.eu,demoAdapter.5363.Alert.5363,2019-06- 24T13:46:14+02:00</references>
+	<references>public-warning-portal@localhost,demoAdapter.5363.Alert.5363,2019-06- 24T13:46:14+02:00</references>
 	<info>
 		<language>nl-NL</language>
 		<category>Safety</category>
