@@ -46,6 +46,7 @@ TODO
 - [ ] GUI config - Stream
 - [ ] Settings - CAP identity
 - [ ] Logging - Add stream logs to GUI
+- [ ] Option to use ODR-DabMod config file instead of fifo output
 
 # License
 This project is licensed under the GNU General Public License v3.0. See

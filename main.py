@@ -546,7 +546,7 @@ def main_menu():
 def main():
     global cap, dab, streams
 
-    d.set_background_title('© 2021 Rijkswaterstaat-CIV CFNS - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
+    d.set_background_title('CFNS - Rijkswaterstaat CIV, Delft © 2021 - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
     # Setup a queue for synchronizing data between the CAP and DAB threads
     q = queue.Queue(maxsize=int(config['general']['queuelimit']))
