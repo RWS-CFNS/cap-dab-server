@@ -10,6 +10,8 @@ Features include:
 - Ability to switch channel's stream sources on the fly
 - Spoken (Text To Speech) CAP description
 
+![Main menu](main_menu.png)
+
 # Installation
 Requirements:
 - odr-audioenc (DAB/DAB+ Encoder)
