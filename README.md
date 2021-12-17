@@ -48,7 +48,10 @@ TODO
 - [ ] Logging - Add stream logs to GUI
 
 # License
+This project is licensed under the GNU General Public License v3.0. See
+`LICENSE` for more information.
 
+# Credits
 Credits to [OpenDigitalRadio](http://www.opendigitalradio.org/) for the
 excellent open-source ODR-mmbTools DAB/DAB+ software tools.
 
