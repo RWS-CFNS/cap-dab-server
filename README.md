@@ -14,6 +14,7 @@ Features include:
 
 # Installation
 Requirements:
+- ffmpeg (Convert mp3 TTS output to wav)
 - odr-audioenc (DAB/DAB+ Encoder)
 - odr-padenc (DAB PAD Encoder)
 - odr-dabmux (DAB Multiplexer)
@@ -21,7 +22,6 @@ Requirements:
 - dialog (TUI)
 - Python 3.9+
 - python-pyttsx3 (TTS)
-- python-pydub (Convert mp3 TTS output to wav)
 - python-pythondialog (TUI)
 - python-Flask (HTTP server)
 
@@ -37,8 +37,9 @@ TODO
 - [x] Automatically create fifo
 - [x] Stream class
 - [x] Stream management
-- [ ] Implement stream replacement without use of external scripts
-- [ ] TTS
+- [x] Implement stream replacement without use of external scripts
+- [x] TTS
+- [ ] Configurable label, pty and such for stream replacement/alarm channel
 - [ ] Manual announcement triggering
 - [ ] GUI config - Ensemble announcement
 - [ ] GUI config - Service PTY and Announcement
@@ -47,6 +48,7 @@ TODO
 - [ ] Settings - CAP identity
 - [ ] Logging - Add stream logs to GUI
 - [ ] Option to use ODR-DabMod config file instead of fifo output
+- [ ] Option to restart threads that have quit
 
 # License
 This project is licensed under the GNU General Public License v3.0. See

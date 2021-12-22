@@ -24,7 +24,6 @@ import copy                                                         # For saving
 import os                                                           # For file I/O
 import stat                                                         # For checking if output is a FIFO
 import logging                                                      # Logging facilities
-import pydub                                                        # For converting TTS mp3 output to wav
 import pyttsx3                                                      # Text To Speech engine frontend
 import queue                                                        # Queue for passing data to the DAB processing thread
 import subprocess as subproc                                        # Support for starting subprocesses
@@ -67,8 +66,6 @@ class DABWatcher(threading.Thread):
         # Main a list of currently active announcements with their expiry date
         announcements = []
 
-        alarmpath = '/Users/bastiaan/.cache/cap-dab-server/streams/sub-alarm'
-
         while self._running:
             try:
                 # Wait for a message from the CAPServer
@@ -76,15 +73,35 @@ class DABWatcher(threading.Thread):
                 logger.info(f'CAP message: lang - effective - expires - description') # TODO put in CAPServer
 
                 # Generate TTS output from the description
+                mp3 = f'{self.alarmpath}/tts.mp3'
                 # TODO look for the right language
+                self.tts.setProperty('voice', 'com.apple.speech.synthesis.voice.xander')
+                self.tts.save_to_file(description, mp3)
+                self.tts.runAndWait()
+
+                # Convert the mp3 output to wav, the format supported by odr-audioenc
+                # This process also duplicates the mono channel to stereo, bitrate 48000 Hz and s16
                 # FIXME handle conditions where the conversion fails
-                # TODO use ffmpeg directly instead of pydub, pydub is kinda finicky
-                #mp3 = f'{self.alarmpath}/tts.mp3'
-                #self.tts.setProperty('voice', 'com.apple.speech.synthesis.voice.xander')
-                #self.tts.save_to_file(description, mp3)
-                #self.tts.runAndWait()
-                #seg = pydub.AudioSegment.from_mp3(mp3)
-                #seg.export(f'{self.alarmpath}/tts.wav', format='wav')
+                # TODO output log somewhere
+                ffmpeg = subproc.Popen(( 'ffmpeg',
+                                        '-y',
+                                        '-i', mp3,
+                                        '-acodec', 'pcm_s16le',
+                                        '-ar', '48000',
+                                        '-ac', '2',
+                                        f'{self.alarmpath}/tts.wav'), stdout=subproc.DEVNULL, stderr=subproc.DEVNULL)
+
+                try:
+                    ffmpeg_res = ffmpeg.wait(timeout=20)
+                except subproc.TimeoutExpired as e:
+                    logger.error('ffmpeg took too long')
+                    # TODO handle and log
+                    continue
+
+                if ffmpeg_res != 0:
+                    logger.error('ffmpeg failed')
+                    # TODO handle and log
+                    continue
 
                 if self.alarm:
                     # Signal the alarm announcement
@@ -97,10 +114,8 @@ class DABWatcher(threading.Thread):
 
                     # Modify the stream config in memory so all streams correspond to the alarm stream
                     for stream in self.streamscfg.sections():
-                        #self.streamscfg[stream]['input_type'] = 'file'
-                        #self.streamscfg[stream]['input'] = '../sub-alarm/tts.wav'
-                        self.streamscfg[stream]['input_type'] = 'gst'
-                        self.streamscfg[stream]['input'] = 'http://127.0.0.1:1235'
+                        self.streamscfg[stream]['input_type'] = 'file'
+                        self.streamscfg[stream]['input'] = '../sub-alarm/tts.wav'
 
                         self.streamscfg[stream]['dls_enable'] = 'yes'
                         self.streamscfg[stream]['mot_enable'] = 'no'

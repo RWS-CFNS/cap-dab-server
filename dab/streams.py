@@ -54,6 +54,8 @@ class DABStream(threading.Thread):
         if self.streamcfg.getboolean('mot_enable'):
             os.makedirs(f'{self.streamdir}/mot', exist_ok=True)
 
+        self._running = True
+
     def run(self):
         # Check if we have enough ports available in the specified portrange
         if self.port > self.portrange[1]:
@@ -67,54 +69,61 @@ class DABStream(threading.Thread):
         if pad_enable:
             padlog = open(f'{self.streamdir}/logs/padenc.log', 'ab')
 
-        # Start up odr-audioenc DAB/DAB+ audio encoder
-        audioenc_cmdline = [
-                            f'{self.binpath}/odr-audioenc',
-                            f'--bitrate={self.streamcfg["bitrate"]}',
-                            f'--output=tcp://localhost:{self.port}',
-                            f'--pad-socket={self.name}',
-                            f'--pad={self.streamcfg["pad_length"]}'
-                           ]
+        while self._running:
+            # Start up odr-audioenc DAB/DAB+ audio encoder
+            audioenc_cmdline = [
+                                f'{self.binpath}/odr-audioenc',
+                                f'--bitrate={self.streamcfg["bitrate"]}',
+                                '-D',
+                                f'--output=tcp://localhost:{self.port}',
+                                f'--pad-socket={self.name}',
+                                f'--pad={self.streamcfg["pad_length"]}'
+                            ]
 
-        # Set the DAB type
-        if self.streamcfg['output_type'] == 'dab':
-            audioenc_cmdline.append('--dab')
+            # Set the DAB type
+            if self.streamcfg['output_type'] == 'dab':
+                audioenc_cmdline.append('--dab')
 
-        # Add the input to cmdline
-        if self.streamcfg['input_type'] == 'gst':
-            audioenc_cmdline.append(f'--gst-uri={self.streamcfg["input"]}')
-        elif self.streamcfg['input_type'] == 'fifo':
-            audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
-            audioenc_cmdline.append('--format=raw')
-            audioenc_cmdline.append('--fifo-silence')
-        elif self.streamcfg['input_type'] == 'file':
-            audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
-            audioenc_cmdline.append('--format=wav')
+            # Add the input to cmdline
+            if self.streamcfg['input_type'] == 'gst':
+                audioenc_cmdline.append(f'--gst-uri={self.streamcfg["input"]}')
+            elif self.streamcfg['input_type'] == 'fifo':
+                audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
+                audioenc_cmdline.append('--format=raw')
+                audioenc_cmdline.append('--fifo-silence')
+            elif self.streamcfg['input_type'] == 'file':
+                audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
+                audioenc_cmdline.append('--format=wav')
 
-        self.audio = subproc.Popen(audioenc_cmdline, stdout=audiolog, stderr=audiolog)
+            self.audio = subproc.Popen(audioenc_cmdline, stdout=audiolog, stderr=audiolog)
 
-        # Start up odr-padenc PAD encoder
-        if pad_enable:
-            padenc_cmdline = [
-                              f'{self.binpath}/odr-padenc',
-                              f'--output={self.name}'
-                             ]
+            # Start up odr-padenc PAD encoder
+            if pad_enable:
+                padenc_cmdline = [
+                                f'{self.binpath}/odr-padenc',
+                                f'--output={self.name}'
+                                ]
 
-            # Add DLS and MOT if enabled
-            if self.streamcfg.getboolean('dls_enable'):
-                padenc_cmdline.append(f'--dls={self.streamdir}/dls.txt')
-            if self.streamcfg.getboolean('mot_enable'):
-                padenc_cmdline.append(f'--dir={self.streamdir}/mot')
-                padenc_cmdline.append(f'--sleep={self.streamcfg["mot_timeout"]}')
+                # Add DLS and MOT if enabled
+                if self.streamcfg.getboolean('dls_enable'):
+                    padenc_cmdline.append(f'--dls={self.streamdir}/dls.txt')
+                if self.streamcfg.getboolean('mot_enable'):
+                    padenc_cmdline.append(f'--dir={self.streamdir}/mot')
+                    padenc_cmdline.append(f'--sleep={self.streamcfg["mot_timeout"]}')
 
-            self.pad = subproc.Popen(padenc_cmdline, stdout=padlog, stderr=padlog)
+                self.pad = subproc.Popen(padenc_cmdline, stdout=padlog, stderr=padlog)
 
-        # TODO quit odr-audioenc if odr-padenc exists
+            # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
+            self.audio.communicate()[0]
 
-        # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
-        self.audio.communicate()[0]
-        if pad_enable:
-            self.pad.communicate()[0]
+            # quit odr-padenc if odr-audioenc exits for some reason
+            if pad_enable:
+                while self.pad.poll() == None:
+                    self.pad.terminate()
+
+            # wait a second to prevent going into an restarting loop and overloading the system
+            # TODO check the return code, and prevent restarting if too many error occur
+            time.sleep(1)
 
         audiolog.close()
         if pad_enable:
@@ -124,6 +133,8 @@ class DABStream(threading.Thread):
     def join(self):
         if not self.is_alive():
             return
+
+        self._running = False
 
         if self.audio != None:
             self.audio.terminate()
