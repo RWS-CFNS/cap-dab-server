@@ -38,7 +38,6 @@ from dialog import Dialog           # Beautiful dialogs using the external progr
 from cap.server import CAPServer    # CAP server
 from dab.server import DABServer    # DAB server
 from dab.streams import DABStreams  # DAB streams
-from dab.odr import ODRMuxConfig    # OpenDigitalRadio server support
 
 # Max path length from limits.h
 MAX_PATH = os.pathconf('/', 'PC_PATH_MAX')

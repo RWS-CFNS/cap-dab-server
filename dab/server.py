@@ -19,12 +19,111 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-from dab.odr import *                       # OpenDigitalRadio server support
-#from dab.fraunhofer import ContentServer   # TODO Fraunhofer ContentServer support
-import subprocess                           # For state of ODR-DabMux and ODR-DabMod
-import time                                 # For sleep support
+import os                           # For file I/O
+import stat                         # For checking if output is a FIFO
+import logging                      # Logging facilities
+import subprocess as subproc        # Support for starting subprocesses
+import threading                    # Threading support (for running odr-dabmux and odr-dabmod in the background)
+import time                         # For sleep support
+from dab.watcher import DABWatcher  # DAB CAP message watcher
+from dab.muxcfg import ODRMuxConfig # odr-dabmux config
 
 logger = logging.getLogger('server.dab')
+
+# OpenDigitalRadio DAB Multiplexer and Modulator support
+class ODRServer(threading.Thread):
+    def __init__(self, config):
+        threading.Thread.__init__(self)
+
+        self.logdir = config['general']['logdir']
+        self.binpath = config['dab']['odrbin_path']
+        self.muxcfg = config['dab']['mux_config']
+        self.modcfg = config['dab']['mod_config']
+        self.output = config['dab']['output']
+
+        self.mux = None
+        self.mod = None
+
+        # Check if ODR-DabMux and ODR-DabMod are available
+        muxbin = f'{self.binpath}/odr-dabmux'
+        if not os.path.isfile(muxbin):
+            raise Exception(f'Invalid path to DAB Multiplexer binary: {muxbin}')
+
+        modbin = f'{self.binpath}/odr-dabmod'
+        if not os.path.isfile(modbin):
+            raise Exception(f'Invalid path to DAB Modulator binary: {modbin}')
+
+        if os.name == 'posix':
+            if not os.access(muxbin, os.X_OK):
+                raise Exception(f'DAB Multiplexer binary not executable: {muxbin}')
+            if not os.access(modbin, os.X_OK):
+                raise Exception(f'DAB Modulator binary not executable: {modbin}')
+
+    def run(self):
+        # TODO rotate this log, this is not so straightforward it appears
+        muxlog = open(f'{self.logdir}/dabmux.log', 'ab')
+        modlog = open(f'{self.logdir}/dabmod.log', 'ab')
+
+        # check if there's already a file with the same name as our output
+        if os.path.exists(self.output):
+            # if this is a fifo, we don't need to take any action
+            if not stat.S_ISFIFO(os.stat(self.output).st_mode):
+                # otherwise delete the file/dir
+                if os.path.isfile(self.output):
+                    os.remove(self.output)
+                elif os.path.isdir(self.output):
+                    os.rmdir(self.output)
+                else:
+                    raise Exception(f'Unable to remove already existing output path: {self.output}')
+
+                # Create the FIFO that odr-dabmod outputs to
+                os.mkfifo(self.output)
+        else:
+            # Create the FIFO that odr-dabmod outputs to
+            os.mkfifo(self.output)
+
+        # Start up odr-dabmux DAB multiplexer
+        muxlog.write('\n'.encode('utf-8'))
+        self.mux = subproc.Popen((f'{self.binpath}/odr-dabmux', self.muxcfg), stdout=subproc.PIPE, stderr=muxlog)
+
+        # Start up odr-dabmod DAB modulator
+        modlog.write('\n'.encode('utf-8'))
+        # TODO load dabmod config (perhaps by option) / allow manually passing cmdline to odr-dabmod
+        #mod = subproc.Popen(('bin/odr-dabmod', self.modcfg), stdin=mux.stdout, stdout=subproc.PIPE, stderr=modlog)
+        self.mod = subproc.Popen((f'{self.binpath}/odr-dabmod', '-f', self.output, '-m', '1', '-F', 'u8'),
+                                 stdin=self.mux.stdout, stdout=subproc.PIPE, stderr=modlog)
+
+        # Allow odr-dabmux to receive SIGPIPE if odr-dabmod exits
+        self.mux.stdout.close()
+        # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
+        self.mod.communicate()[0]
+
+        modlog.close()
+        muxlog.close()
+
+    def join(self):
+        if not self.is_alive():
+            return
+
+        # Terminate the modulator and multiplexer
+        if self.mod != None:
+            self.mod.terminate()
+            if self.mod.poll() is None:
+                logger.info('DAB modulator terminated successfully!')
+            else:
+                logger.error('Terminating DAB modulator failed. Attempt quitting manually.')
+
+        if self.mux != None:
+            self.mux.terminate()
+            if self.mux.poll() is None:
+                logger.info('DAB modulator terminated successfully!')
+            else:
+                logger.error('Terminating DAB multiplexer failed. Attempt quitting manually.')
+
+        # Remove the fifo file that was used as output
+        os.remove(self.output)
+
+        super().join()
 
 class DABServer():
     def __init__(self, config, q, streams):

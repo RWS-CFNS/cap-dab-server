@@ -121,8 +121,10 @@ class DABStream(threading.Thread):
                 while self.pad.poll() == None:
                     self.pad.terminate()
 
+                # FIXME doesn't always quit, add .wait()?
+
             # wait a second to prevent going into an restarting loop and overloading the system
-            # TODO check the return code, and prevent restarting if too many error occur
+            # TODO check the return code, and prevent automatically restarting if too many errors occur
             time.sleep(1)
 
         audiolog.close()

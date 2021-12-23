@@ -39,7 +39,7 @@ TODO
 - [x] Stream management
 - [x] Implement stream replacement without use of external scripts
 - [x] TTS
-- [ ] Implement ability to cancel announcements
+- [x] Implement ability to cancel announcements
 - [ ] Configurable label, pty and such for stream replacement/alarm channel
 - [ ] Manual announcement triggering
 - [ ] GUI config - Ensemble announcement
