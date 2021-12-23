@@ -41,6 +41,7 @@ class CAPParser():
     # Constants
     TYPE_LINK_TEST = 0
     TYPE_ALERT     = 1
+    TYPE_CANCEL    = 2
 
     # CAP version namespaces
     # NOTE: CAP v1.2 is hardcoded right now
@@ -51,12 +52,12 @@ class CAPParser():
     # timestamp format specified in the CAP v1.2 standard
     TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%S%z'
 
-    # parse stricty, adhering to not only the CAP v1.2 standard but also the NL Subbroker standards
-    strict = False
-
     def __init__(self, app, strict):
         self.app = app
+
+        # parse stricty, adhering to not only the CAP v1.2 standard but also the NL Subbroker standards
         self.strict = strict
+
         self.msg_type = None
 
     # Generate a current timestamp
@@ -101,9 +102,10 @@ class CAPParser():
         return Xml.tostring(root, encoding='unicode', xml_declaration=True)
 
     # Check if the timestamp that has been received is valid
-    def check_timestamp(self, timestamp):
+    @staticmethod
+    def get_datetime(timestamp):
         try:
-            return datetime.datetime.strptime(timestamp, self.TIMESTAMP_FORMAT)
+            return datetime.datetime.strptime(timestamp, CAPParser.TIMESTAMP_FORMAT)
         except ValueError:
             return None
 
@@ -144,11 +146,11 @@ class CAPParser():
 
         # check if the <effective> and <expires> timestamps are formatted correctly
         effective = info.find('CAPv1.2:effective', self.NS).text
-        if self.check_timestamp(effective) is None:
+        if CAPParser.get_datetime(effective) is None:
             logger.error(f'invalid <effective> timestamp format: {effective}')
             return False
         expires = info.find('CAPv1.2:expires', self.NS).text
-        if self.check_timestamp(expires) is None:
+        if CAPParser.get_datetime(expires) is None:
             logger.error(f'invalid <expires> timestamp format: {expires}')
             return False
 
@@ -167,7 +169,7 @@ class CAPParser():
 
         # check if the timestamp is formatted correctly
         timestamp = alert.find('CAPv1.2:sent', self.NS).text
-        if self.check_timestamp(timestamp) is None:
+        if CAPParser.get_datetime(timestamp) is None:
             logger.error(f'invalid <sent> timestamp format: {timestamp}')
             return False
 
@@ -191,9 +193,8 @@ class CAPParser():
         elif msgType == 'Cancel':
             # Check <msgType> separately because it influences whether the element <references> is required
             if alert.find('CAPv1.2:references', self.NS) is None:
-                # We can just give a warning because the documentation isn't 100% clear on whether this
-                # should really be enforced
-                if logger_strict('required element missing from <alert> container: references'):
+                # <references> is required for Cancel
+                if logger.error('required element missing from <alert> container: references'):
                     return False
 
         # check <scope>, as it should always be 'Public'
@@ -205,6 +206,21 @@ class CAPParser():
                 return False
 
         return True
+
+    # Parse the references tag into a list with a dictionary
+    def __parse_references(self, refs):
+        msgs = []
+
+        # Parse the references(s) in the format CAPv1.2 describes
+        for msg in refs.split(' '):
+            ref = msg.split(',')
+            msgs.append({
+                        'identifier': ref[1],
+                        'sender': ref[0],
+                        'sent': ref[2]
+                        })
+
+        return msgs
 
     # Attempt to parse the raw XML (from a webpage for instance) into memory and check
     # if required elements are present
@@ -230,6 +246,11 @@ class CAPParser():
 
         # Parse the elements into class-wide variables
         msgType = root.find('CAPv1.2:msgType', self.NS).text
+
+        self.identifier = root.find(f'CAPv1.2:identifier', self.NS).text
+        self.sender = root.find(f'CAPv1.2:sender', self.NS).text
+        self.sent = root.find(f'CAPv1.2:sent', self.NS).text
+
         if msgType == 'Alert':
             status = root.find('CAPv1.2:status', self.NS).text
             if status == 'Test':
@@ -239,10 +260,13 @@ class CAPParser():
 
                 info = root.find(f'CAPv1.2:info', self.NS)
                 self.lang = info.find(f'CAPv1.2:language', self.NS).text
-                self.effective = info.find(f'CAPv1.2:effective', self.NS).text
-                self.expires = info.find(f'CAPv1.2:expires', self.NS).text
+                self.effective = CAPParser.get_datetime(info.find(f'CAPv1.2:effective', self.NS).text)
+                self.expires = CAPParser.get_datetime(info.find(f'CAPv1.2:expires', self.NS).text)
                 self.description = info.find(f'CAPv1.2:description', self.NS).text
+        elif msgType == 'Cancel':
+            self.msg_type = self.TYPE_CANCEL
 
+            self.references = self.__parse_references(root.find(f'CAPv1.2:references', self.NS).text)
         if self.msg_type == None:
             logger.error(f'Unknown message type: {msgType}')
 

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
-	<identifier>demoAdapter.5363.Alert.5363</identifier>
+	<identifier>demoAdapter.5364.Alert.5364</identifier>
 	<sender>public-warning-portal@localhost</sender>
-	<sent>2019-06-24T13:46:14+02:00</sent>
+	<sent>2021-06-24T13:46:14+02:00</sent>
 	<status>Actual</status>
 	<msgType>Alert</msgType>
 	<scope>Public</scope>
@@ -13,10 +13,10 @@
 		<urgency>Unknown</urgency>
 		<severity>Unknown</severity>
 		<certainty>Unknown</certainty>
-		<effective>2019-06-24T13:46:14+02:00</effective>
-		<expires>2019-06-24T14:46:14+02:00</expires>
-		<description>NL-Alert 24-06-2019 13:46
-CONTROLEBERICHT. U hoeft niets te doen. Meer informatie op www.nl- alert.nl</description>
+		<effective>2021-06-24T13:46:14+02:00</effective>
+		<expires>2022-06-24T14:46:14+02:00</expires>
+		<description>NL-Alert 24-06-2021 13:46
+Dit is een CONTROLEBERICHT. U hoeft niets te doen. Meer informatie op www.nl-alert.nl</description>
 		<area>
 			<areaDesc>Alert area</areaDesc>
 		</area>

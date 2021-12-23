@@ -21,6 +21,7 @@
 
 import configparser                                                 # Python INI file parser
 import copy                                                         # For saving/restoring Config objects
+import datetime                                                     # To get the current date and time
 import os                                                           # For file I/O
 import stat                                                         # For checking if output is a FIFO
 import logging                                                      # Logging facilities
@@ -30,6 +31,7 @@ import subprocess as subproc                                        # Support fo
 import telnetlib                                                    # For signalling (alarm) announcements from DABWatcher
 import threading                                                    # Threading support (for running Mux and Mod in the background)
 from dab.boost_info_parser import BoostInfoTree, BoostInfoParser    # C++ Boost INFO format parser (used for dabmux.cfg)
+from cap.parser import CAPParser                                    # CAP XML parser (internal)
 
 logger = logging.getLogger('server.dab')
 
@@ -66,17 +68,95 @@ class DABWatcher(threading.Thread):
         # Main a list of currently active announcements with their expiry date
         announcements = []
 
+        # Flag that keeps track of whether the TTS message should be updated
+        changed = False
+
+        # Insert silence into TTS depending on the backend that's used by pyttsx3
+        def _slnc(ms):
+            backend = self.tts.proxy._module.__name__
+
+            # SAPI5 on Windows
+            # NSSS on macOS
+            # espeak on Linux and other platforms
+
+            if backend == 'pyttsx3.drivers.sapi5':
+                return f'<silence msec="{ms}"/>'
+            elif backend == 'pyttsx3.drivers.nsss':
+                return f'[[slnc {ms}]]'
+            elif backend == 'pyttsx3.drivers.espeak':
+                return f'<break time="{ms}ms"/>'
+            else:
+                logger.warn(f'Unsupported TTS backend, please contact the developer: {backend}')
+                return ''
+
         while self._running:
             try:
+                # Check if there's any expired announcements to be cancelled
+                for ann in announcements:
+                    # Expires shouldn't be None, as the parser already check it
+                    if ann['expires'] == None:
+                        # In case it does, remove the announcement from the queue
+                        logger.error(f'invalid <expires> timestamp format: {ann["expires"]}')
+                        announcements.remove(ann)
+                    elif ann['expires'] < datetime.datetime.now(ann['expires'].tzinfo):
+                        logger.info(f'Cancelled CAP message: {ann["identifier"]}')
+                        announcements.remove(ann)
+
                 # Wait for a message from the CAPServer
-                lang, effective, expires, description = self.q.get(block=True, timeout=2)
-                logger.info(f'CAP message: lang - effective - expires - description') # TODO put in CAPServer
+                a = self.q.get(block=True, timeout=1)
+
+                # Handle the current message
+                if a['msg_type'] == CAPParser.TYPE_ALERT:
+                    logger.info(f'New CAP message: {a["identifier"]}')
+                    announcements.append(a)
+                elif a['msg_type'] == CAPParser.TYPE_CANCEL:
+                    cancelled = False
+
+                    # Remove cancelled messages from the list
+                    for ref in a['references']:
+                        for ann in announcements:
+                            if ref['sender']     == ann['sender'] and \
+                               ref['identifier'] == ann['identifier'] and \
+                               ref['sent']       == ann['sent']:
+                                logger.info(f'Cancelled CAP message: {ref["identifier"]}')
+                                announcements.remove(ann)
+                                cancelled = True
+
+                    # Prevent restarting the stream(s) if no message was cancelled
+                    if cancelled == False:
+                        logger.warn(f'Invalid CAP cancel request: {ref["identifier"]} {ref["sender"]} {ref["sent"]}')
+
+                        self.q.task_done()
+                        continue
+
+                # Generate new TTS message
+                num = len(announcements)
+                tts_str = ''
+
+                if num == 0:
+                    # Stop the alarm announcement and switch services back to their original streams
+                    for stream in self.streamscfg.sections():
+                        # TODO change back dls and MOT
+                        self.streams.chreplace(stream)
+
+                    self.q.task_done()
+                    continue
+                elif num == 1:
+                    tts_str += f'{_slnc(2000)} {announcements[0]["description"]}. Einde bericht. {_slnc(2000)} Herhaling'
+                else:
+                    # In the case there's multiple messages in the queue:
+                    # Combine them into a single string with start and end markers.
+                    i = 0
+                    for ann in announcements:
+                        # TODO handle other languages
+                        tts_str += f'{_slnc(2000)} Bericht {i + 1}. {_slnc(1000)} {a["description"]} {_slnc(500)} Einde bericht {i + 1}.'
+                        i += 1
 
                 # Generate TTS output from the description
                 mp3 = f'{self.alarmpath}/tts.mp3'
                 # TODO look for the right language
                 self.tts.setProperty('voice', 'com.apple.speech.synthesis.voice.xander')
-                self.tts.save_to_file(description, mp3)
+                self.tts.save_to_file(tts_str, mp3)
                 self.tts.runAndWait()
 
                 # Convert the mp3 output to wav, the format supported by odr-audioenc
@@ -90,25 +170,29 @@ class DABWatcher(threading.Thread):
                                         '-ar', '48000',
                                         '-ac', '2',
                                         f'{self.alarmpath}/tts.wav'), stdout=subproc.DEVNULL, stderr=subproc.DEVNULL)
-
                 try:
                     ffmpeg_res = ffmpeg.wait(timeout=20)
                 except subproc.TimeoutExpired as e:
                     logger.error('ffmpeg took too long')
                     # TODO handle and log
+
+                    self.q.task_done()
                     continue
 
                 if ffmpeg_res != 0:
                     logger.error('ffmpeg failed')
                     # TODO handle and log
+
+                    self.q.task_done()
                     continue
 
+                # Signal the alarm announcement if enabled in settings
                 if self.alarm:
-                    # Signal the alarm announcement
                     # TODO start later if effective is later than current time
                     with telnetlib.Telnet('localhost', self.telnetport) as t:
                         t.write(b'set alarm active 1\n')
 
+                # Perform channel replacement if enabled in settings
                 if self.replace:
                     # Skip services that don't have the Alarm announcement enabled # TODO mention this in the GUI
 
@@ -120,17 +204,18 @@ class DABWatcher(threading.Thread):
                         self.streamscfg[stream]['dls_enable'] = 'yes'
                         self.streamscfg[stream]['mot_enable'] = 'no'
 
-                        # FIXME find services via component config!
+                        # FIXME TODO find services via component config!
                         with telnetlib.Telnet('localhost', self.telnetport) as t:
+                            #replace all service labels, pty with the ones from srv-alarm
                             t.write(b'set srv-audio label NL-Alert,NL-Alert\n')
                             t.write(b'set srv-audio pty 3\n')
 
                         # Then, restart all modified streams
                         self.streams.chreplace(stream, self.streamscfg[stream])
 
-                    #replace all streams with the one from sub-alarm
-                    #replace all service labels, pty with the ones from srv-alarm
                     pass
+
+                self.q.task_done()
             except queue.Empty:
                 pass
 
@@ -140,7 +225,6 @@ class DABWatcher(threading.Thread):
 
         # TODO allow the queue to be emptied first
         self._running = False
-        self.q.join()
         super().join()
 
 # OpenDigitalRadio DAB Multiplexer and Modulator support

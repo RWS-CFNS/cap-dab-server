@@ -585,6 +585,7 @@ def main():
 
     # Stop the DAB streams
     d.gauge_update(33, 'Shutting down DAB streams...', update_text=True)
+    q.join()
     streams.stop()
 
     # Stop the DAB server

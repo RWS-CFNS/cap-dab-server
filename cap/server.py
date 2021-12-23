@@ -104,7 +104,27 @@ class CAPServer():
             pass
         elif cp.msg_type == CAPParser.TYPE_ALERT:
             try:
-                self._q.put((cp.lang, cp.effective, cp.expires, cp.description))
+                self._q.put({
+                            'msg_type': cp.msg_type,
+                            'identifier': cp.identifier,
+                            'sender': cp.sender,
+                            'sent': cp.sent,
+                            'lang': cp.lang,
+                            'effective': cp.effective,
+                            'expires': cp.expires,
+                            'description': cp.description
+                            })
+            except queue.Full:
+                logger.error('Queue is full, perhaps increase queuelimit?')
+        elif cp.msg_type == CAPParser.TYPE_CANCEL:
+            try:
+                self._q.put({
+                            'msg_type': cp.msg_type,
+                            'identifier': cp.identifier,
+                            'sender': cp.sender,
+                            'sent': cp.sent,
+                            'references': cp.references
+                            })
             except queue.Full:
                 logger.error('Queue is full, perhaps increase queuelimit?')
         else:

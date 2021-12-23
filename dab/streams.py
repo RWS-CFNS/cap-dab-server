@@ -203,10 +203,14 @@ class DABStreams():
 
         return ret
 
-    def chreplace(self, stream, newcfg):
+    def chreplace(self, stream, newcfg=None):
         i = 0
         for s, t in self._streams:
             if s == stream:
+                # Restore to the original stream
+                if newcfg == None:
+                    newcfg = self._streamscfg[stream]
+
                 # Stop the old stream
                 t.join()
                 del self._streams[i]
