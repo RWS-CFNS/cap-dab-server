@@ -71,8 +71,7 @@ else:
                          'odrbin_path': f'/usr/local/bin',
                          'mux_config': f'{CONFIG_HOME}/cap-dab-server/dabmux.mux',
                          'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini',
-                         'telnetport': '39899',
-                         'output': '/tmp/cap-dab-server-output.fifo'
+                         'telnetport': '39899'
                         }
     config['cap'] =     {
                          'strict_parsing': 'no',
@@ -323,18 +322,18 @@ def services_config():
 
         def add():
             while True:
-                code, string = d.inputbox('Please enter a new identifier/name for this service (no spaces)',
+                code, name = d.inputbox('Please enter a new identifier/name for this service (no spaces)',
                                           title=f'Add service - {TITLE}')
 
                 if code in (Dialog.CANCEL, Dialog.ESC):
                     break
-                elif string == '':
+                elif name == '':
                     error('Identifier cannot be empty.')
-                elif ' ' in string:
+                elif ' ' in name:
                     error('Identifier cannot contain spaces.')
                 else:
-                    dab.config.cfg.services[string]
-                    modify(string)
+                    dab.config.cfg.services[name]
+                    modify(name)
                     break
 
         while True:
@@ -432,13 +431,11 @@ def settings():
              'dabmod.ini config file path'),
             ('DAB telnetport',      9,  1, config['dab']['telnetport'],       9,  20, 6,  5,        0,
              'Internally used DabMux telnetport used for signalling announcements'),
-            ('DAB output FIFO',     10, 1, config['dab']['output'],           10, 20, 64, MAX_PATH, 0,
-             'FIFO to output modulated DAB data to'),
-            ('Strict CAP parsing',  11, 1, config['cap']['strict_parsing'],   11, 20, 4,  3,        0,
+            ('Strict CAP parsing',  10, 1, config['cap']['strict_parsing'],   10, 20, 4,  3,        0,
              'Enforce strict CAP XML parsing (yes/no)'),
-            ('CAP server host',     12, 1, config['cap']['host'],             12, 20, 46, 45,       0,
+            ('CAP server host',     11, 1, config['cap']['host'],             11, 20, 46, 45,       0,
              'IP address to host CAP HTTP server on (IPv4/IPv6)'),
-            ('CAP server port',     13, 1, config['cap']['port'],             13, 20, 6,  5,        0,
+            ('CAP server port',     12, 1, config['cap']['port'],             12, 20, 6,  5,        0,
              'Port to host CAP HTTP server on')
             ])
 
@@ -454,13 +451,12 @@ def settings():
                                 'odrbin_path': elems[5],
                                 'mux_config': elems[6],
                                 'mod_config': elems[7],
-                                'telnetport': elems[8],
-                                'output': elems[9]
+                                'telnetport': elems[8]
                                 }
             config['cap'] = {
-                                'strict_parsing': elems[10],
-                                'host': elems[11],
-                                'port': elems[12]
+                                'strict_parsing': elems[9],
+                                'host': elems[10],
+                                'port': elems[11]
                                 }
             with open(server_config, 'w') as config_file:
                 config.write(config_file)

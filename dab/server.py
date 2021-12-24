@@ -39,7 +39,7 @@ class ODRServer(threading.Thread):
         self.binpath = config['dab']['odrbin_path']
         self.muxcfg = config['dab']['mux_config']
         self.modcfg = config['dab']['mod_config']
-        self.output = config['dab']['output']
+        self.output = '/tmp/welle-io.fifo'           # FIXME FIXME FIXME FIXME get from dabmod.ini (filename)
 
         self.mux = None
         self.mod = None
@@ -88,9 +88,7 @@ class ODRServer(threading.Thread):
 
         # Start up odr-dabmod DAB modulator
         modlog.write('\n'.encode('utf-8'))
-        # TODO load dabmod config (perhaps by option) / allow manually passing cmdline to odr-dabmod
-        #mod = subproc.Popen(('bin/odr-dabmod', self.modcfg), stdin=mux.stdout, stdout=subproc.PIPE, stderr=modlog)
-        self.mod = subproc.Popen((f'{self.binpath}/odr-dabmod', '-f', self.output, '-m', '1', '-F', 'u8'),
+        self.mod = subproc.Popen((f'{self.binpath}/odr-dabmod', self.modcfg),
                                  stdin=self.mux.stdout, stdout=subproc.PIPE, stderr=modlog)
 
         # Allow odr-dabmux to receive SIGPIPE if odr-dabmod exits
@@ -209,7 +207,7 @@ class DABServer():
         server = self._odr.is_alive() if self._odr != None else False
         watcher = self._watcher.is_alive() if self._watcher != None else False
         # FIXME check these properly
-        mux = subprocess.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0
-        mod = subprocess.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0
+        mux = subproc.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0
+        mod = subproc.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0
 
         return (server, watcher, mux, mod)

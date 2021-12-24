@@ -46,9 +46,10 @@ TODO
 - [ ] GUI config - Service PTY and Announcement
 - [ ] GUI config - Subchannels
 - [ ] GUI config - Stream
+- [ ] GUI config - DAB modulator
 - [ ] Settings - CAP identity
 - [ ] Logging - Add stream logs to GUI
-- [ ] Option to use ODR-DabMod config file instead of fifo output
+- [x] Option to use ODR-DabMod config file instead of fifo output
 - [ ] Option to restart threads that have quit
 
 # License

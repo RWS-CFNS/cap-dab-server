@@ -160,7 +160,7 @@ class DABWatcher(threading.Thread):
                 # This process also duplicates the mono channel to stereo, bitrate 48000 Hz and s16
                 # FIXME handle conditions where the conversion fails
                 # TODO output log somewhere
-                ffmpeg = subproc.Popen(( 'ffmpeg',
+                ffmpeg = subproc.Popen(('ffmpeg',
                                         '-y',
                                         '-i', mp3,
                                         '-acodec', 'pcm_s16le',
