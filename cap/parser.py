@@ -25,18 +25,6 @@ import xml.etree.ElementTree as Xml     # XML parser
 
 logger = logging.getLogger('server.cap')
 
-# Log via logging.error or logging.warning depending on whether strict CAP parsing is enforced or not
-# Return bool:
-# - True if strict parsing is enabled
-# - False if strict parsing is disabled
-def logger_strict(app, msg):
-    if strict:
-        logger.error(msg)
-        return True
-    else:
-        logger.warning(msg)
-        return False
-
 class CAPParser():
     # Constants
     TYPE_LINK_TEST = 0
@@ -123,7 +111,7 @@ class CAPParser():
         # check <language>, as it should basically always be present
         if info.find(f'CAPv1.2:language', self.NS) is None:
             # Allow when not running in strict mode
-            if logger_strict('{required element missing from <info> container: language'):
+            if utils.logger_strict(logger, '{required element missing from <info> container: language'):
                 return False
 
         # check <category>, it should always have a value of 'Safety'
@@ -202,7 +190,7 @@ class CAPParser():
         if scope != 'Public':
             # In production this should always be 'Public'. In a development/test environment this may
             # not always be this case.
-            if logger_strict(f'invalid scope: {scope}'):
+            if utils.logger_strict(logger, f'invalid scope: {scope}'):
                 return False
 
         return True
@@ -237,7 +225,7 @@ class CAPParser():
 
         # Check the if the namespace matches what is expected of the main broker (CAP v1.2)
         if root.tag != f'{{{self.NS["CAPv1.2"]}}}alert':
-            if logger_strict(f'invalid namespace: {root.tag}'):
+            if utils.logger_strict(logger, f'invalid namespace: {root.tag}'):
                 return False
 
         # Check if all required elements are present

@@ -29,7 +29,7 @@ import threading                            # Threading support (for running Fla
 import os                                   # For redirecting Flask's logging output to a file using an env. variable
 from werkzeug.serving import make_server    # Flask backend
 from cap.parser import CAPParser            # CAP XML parser (internal)
-from cap.parser import logger_strict        # More logging facilities
+import utils
 
 logger = logging.getLogger('server.cap')
 
@@ -84,7 +84,7 @@ class CAPServer():
 
         # Check if Content-Type header is set to an XML MIME type
         if not content_type.startswith('application/xml') and not content_type.startswith('text/xml'):
-            if logger_strict(self.app, f'{"FAIL" if strict else "WARN"}: invalid Content-Type: {content_type}'):
+            if utils.logger_strict(logger, f'{"FAIL" if strict else "WARN"}: invalid Content-Type: {content_type}'):
                 return flask.Response(status=415)
 
         # Initialize the CAP parser

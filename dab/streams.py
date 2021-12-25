@@ -25,20 +25,18 @@ import os                       # For checking if files exist
 import subprocess as subproc    # Support for starting subprocesses
 import threading                # Threading support (for running streams in the background)
 import time                     # For sleep support
+import utils
 
 logger = logging.getLogger('server.dab')
 
 # This class represents every stream as a thread, defined in streams.ini
 class DABStream(threading.Thread):
-    def __init__(self, config, name, index, streamcfg):
+    def __init__(self, config, name, index, streamcfg, output):
         threading.Thread.__init__(self)
 
         self.name = name
         self.streamcfg = streamcfg
-        self.portrange = (39801, 39898)           # XXX XXX XXX FIXME don't hardcode ports, get from config file
-
-        # Get which output port which should use
-        self.port = self.portrange[0] + index
+        self.outsock = output
 
         self.streamdir = f'{config["general"]["logdir"]}/streams/{self.name}'
         self.binpath = config['dab']['odrbin_path']
@@ -57,10 +55,6 @@ class DABStream(threading.Thread):
         self._running = True
 
     def run(self):
-        # Check if we have enough ports available in the specified portrange
-        if self.port > self.portrange[1]:
-            raise Exception('Too many streams running, no more available ports. Check configuration.')
-
         # If DLS and MOT are disabled, we won't need to start odr-padenc
         pad_enable = self.streamcfg.getboolean('dls_enable') and self.streamcfg.getboolean('mot_enable')
 
@@ -75,7 +69,7 @@ class DABStream(threading.Thread):
                                 f'{self.binpath}/odr-audioenc',
                                 f'--bitrate={self.streamcfg["bitrate"]}',
                                 '-D',
-                                f'--output=tcp://localhost:{self.port}',
+                                f'--output=ipc://{self.outsock}',
                                 f'--pad-socket={self.name}',
                                 f'--pad={self.streamcfg["pad_length"]}'
                             ]
@@ -162,15 +156,16 @@ class DABStreams():
         self._srvcfg = config
 
         self._streamscfg = None
-        self._streams = []
+        self.streams = []
 
-    def _start_stream(self, stream, index, cfg):
+    def _start_stream(self, stream, index, cfg, out):
         logger.info(f'Starting up DAB stream {stream}...')
 
         try:
-            thread = DABStream(self._srvcfg, stream, index, cfg)
+            thread = DABStream(self._srvcfg, stream, index, cfg, out)
             thread.start()
-            self._streams.insert(index, (stream, thread))
+
+            self.streams.insert(index, (stream, thread, cfg, out))
         except KeyError as e:
             logger.error(f'Unable to start DAB stream "{stream}", check configuration. {e}')
             return False
@@ -198,16 +193,35 @@ class DABStreams():
         i = 0
         ret = True
         for stream in self._streamscfg.sections():
-            if self._start_stream(stream, i, self._streamscfg[stream]):
+            # Create a temporary FIFO for output
+            out = utils.create_fifo()
+
+            if self._start_stream(stream, i, self._streamscfg[stream], out):
                 i += 1
             else:
+                utils.remove_fifo(out)
                 ret = False
 
         return ret
 
-    def chreplace(self, stream, newcfg=None):
+    # Get the specified stream's configuration
+    #  def getcfg(self, stream, default=False):
+        #  if default:
+            #  try:
+                #  return self._streamscfg[stream]
+            #  except KeyError:
+                #  return None
+        #  else:
+            #  for s, t, c, o in self.streams:
+                #  if s == stream:
+                    #  return c
+#
+            #  return None
+
+    # Change the configuration for a stream, used for channel replacement mainly
+    def setcfg(self, stream, newcfg=None):
         i = 0
-        for s, t in self._streams:
+        for s, t, c, o in self.streams:
             if s == stream:
                 # Restore to the original stream
                 if newcfg == None:
@@ -215,13 +229,13 @@ class DABStreams():
 
                 # Stop the old stream
                 t.join()
-                del self._streams[i]
+                del self.streams[i]
 
                 # Allow sockets some time to unbind (FIXME needed?)
                 time.sleep(4)
 
                 # And fire up the new one
-                return self._start_stream(stream, i, newcfg)
+                return self._start_stream(stream, i, newcfg, o)
 
             i += 1
 
@@ -230,11 +244,11 @@ class DABStreams():
         if self._streamscfg == None:
             return
 
-        for stream in self._streams:
-            if stream != None and stream[1] != None:
-                stream[1].join()
+        for s, t, c, o in self.streams:
+            utils.remove_fifo(o)
+            t.join()
 
-        self._streams = []
+        self.streams = []
 
     def restart(self):
         if self._streamscfg == None:
@@ -252,7 +266,7 @@ class DABStreams():
 
         streams = []
 
-        for stream in self._streams:
-            streams.append((stream[0], stream[1].is_alive()))
+        for s, t, c, o in self.streams:
+            streams.append((s, t.is_alive()))
 
         return streams

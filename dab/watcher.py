@@ -20,6 +20,7 @@
 #
 
 import configparser                 # Python INI file parser
+import copy                         # For creating a copy on the Stream configuration
 import datetime                     # To get the current date and time
 import logging                      # Logging facilities
 import os                           # For file I/O
@@ -35,29 +36,19 @@ logger = logging.getLogger('server.dab')
 # DAB queue watcher and message processing
 # This thread handles messages received from the CAPServer
 class DABWatcher(threading.Thread):
-    def __init__(self, config, zmqsock, q, streams):
+    def __init__(self, config, q, zmqsock, streams):
         threading.Thread.__init__(self)
 
         self.zmq = zmq.Context()
         self.zmqsock = zmqsock
 
+        self.q = q
+        self.streams = streams
+
         self.alarm = config['warning'].getboolean('alarm')
         self.replace = config['warning'].getboolean('replace')
 
         self.alarmpath = f'{config["general"]["logdir"]}/streams/sub-alarm'
-
-        self.q = q
-        self.streams = streams
-
-        # Load in streams.ini
-        stream_config = config['dab']['stream_config']
-        os.makedirs(os.path.dirname(stream_config), exist_ok=True)
-        self.streamscfg = configparser.ConfigParser()
-        if os.path.isfile(stream_config):
-            self.streamscfg.read(stream_config)
-        else:
-            logger.error(f'Invalid file: {stream_config}. Unable to start DAB watcher thread')
-            raise OSError.FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), stream_config)
 
         self.tts = pyttsx3.init()
 
@@ -164,20 +155,21 @@ class DABWatcher(threading.Thread):
 
                 if num == 0:
                     # Stop the alarm announcement and switch services back to their original streams
-                    for stream in self.streamscfg.sections():
-                        # TODO change back dls and MOT
-                        self.streams.chreplace(stream)
+                    for s, t, c, o in self.streams.streams:
+                        # TODO change back dls and label
+                        self.streams.setcfg(s)
 
                     self.q.task_done()
                     continue
                 elif num == 1:
-                    tts_str += f'{_slnc(2000)} {announcements[0]["description"]}. Einde bericht. {_slnc(2000)} Herhaling'
+                    tts_str += f'{_slnc(2000)} {announcements[0]["description"]}. {_slnc(500)} Einde bericht. {_slnc(2000)} Herhaling'
                 else:
                     # In the case there's multiple messages in the queue:
                     # Combine them into a single string with start and end markers.
                     for i, ann in enumerate(announcements):
                         # TODO handle other languages
-                        tts_str += f'{_slnc(2000)} Bericht {i + 1}. {_slnc(1000)} {a["description"]} {_slnc(500)} Einde bericht {i + 1}.'
+                        tts_str += f'{_slnc(2000)} Bericht {i + 1}. {_slnc(1000)} {a["description"]}. {_slnc(500)} Einde bericht {i + 1}.'
+                    tts_str += f'{_slnc(2000)} Herhaling'
 
                 # Generate TTS output from the description
                 mp3 = f'{self.alarmpath}/tts.mp3'
@@ -224,22 +216,25 @@ class DABWatcher(threading.Thread):
                     # Skip services that don't have the Alarm announcement enabled # TODO mention this in the GUI
 
                     # Modify the stream config in memory so all streams correspond to the alarm stream
-                    for stream in self.streamscfg.sections():
-                        self.streamscfg[stream]['input_type'] = 'file'
-                        self.streamscfg[stream]['input'] = '../sub-alarm/tts.wav'
+                    for s, t, c, o in self.streams.streams:
+                        # Create a new config copy
+                        cfg = copy.deepcopy(c)
 
-                        self.streamscfg[stream]['dls_enable'] = 'yes'
-                        self.streamscfg[stream]['mot_enable'] = 'no'
+                        cfg['input_type'] = 'file'
+                        cfg['input'] = '../sub-alarm/tts.wav'
+
+                        cfg['dls_enable'] = 'yes'
+                        cfg['mot_enable'] = 'no'
 
                         # FIXME TODO find services via component config!
                         # Replace all service labels, pty with the ones from srv-alarm
                         out = mux_send(muxsock, 'set srv-audio label NL-Alert,NL-Alert')
-                        logger.info(f'setting Alarm Service Label on service {stream}, res: {out}')
+                        logger.info(f'setting Alarm Service Label on service {s}, res: {out}')
                         out = mux_send(muxsock, 'set srv-audio pty 3')
-                        logger.info(f'Setting INFO PTY on service {stream}, res: {out}')
+                        logger.info(f'Setting INFO PTY on service {s}, res: {out}')
 
                         # Then, restart all modified streams
-                        self.streams.chreplace(stream, self.streamscfg[stream])
+                        self.streams.setcfg(s, cfg)
 
                 self.q.task_done()
             except queue.Empty:

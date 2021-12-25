@@ -20,44 +20,15 @@
 #
 
 import os                           # For file I/O
-import stat                         # For checking if output is a FIFO
 import logging                      # Logging facilities
 import subprocess as subproc        # Support for starting subprocesses
-import tempfile                     # For creating a temporary FIFO
 import threading                    # Threading support (for running odr-dabmux and odr-dabmod in the background)
 import time                         # For sleep support
-import uuid                         # For generating random FIFO file names
 from dab.watcher import DABWatcher  # DAB CAP message watcher
 from dab.muxcfg import ODRMuxConfig # odr-dabmux config
+import utils
 
 logger = logging.getLogger('server.dab')
-
-# Create a new fifo (based on an specified path or if path is None, a new temporary file)
-def _create_fifo(path=None):
-    if path == None:
-        # Create a new temporary file if no path was specified
-        path = os.path.join(tempfile.mkdtemp(), str(uuid.uuid4()))
-        os.mkfifo(path)
-    else:
-        # Check if there's already a file with the same name as our output
-        if os.path.exists(path):
-            # If this is a FIFO, we don't need to take any action
-            if not stat.S_ISFIFO(os.stat(path).st_mode):
-                # Otherwise delete the file/dir
-                if os.path.isfile(path):
-                    os.remove(path)
-                elif os.path.isdir(path):
-                    os.rmdir(path)
-                else:
-                    raise Exception(f'Unable to remove already existing FIFO path: {path}')
-
-                # Create the FIFO
-                os.mkfifo(path)
-        else:
-            # Create the FIFO that odr-dabmod outputs to
-            os.mkfifo(path)
-
-    return path
 
 # OpenDigitalRadio DAB Multiplexer and Modulator support
 class ODRServer(threading.Thread):
@@ -94,7 +65,7 @@ class ODRServer(threading.Thread):
         modlog = open(f'{self.logdir}/dabmod.log', 'ab')
 
         # Create the FIFO that odr-dabmod outputs to
-        _create_fifo(self.output)
+        utils.create_fifo(self.output)
 
         # Start up odr-dabmux DAB multiplexer
         muxlog.write('\n'.encode('utf-8'))
@@ -153,10 +124,10 @@ class DABServer():
         logger.info('Starting up DAB ensemble...')
 
         # Create a temporary fifo for IPC with ODR-DabMux over ZMQ
-        self._zmqsock = _create_fifo()
+        self._zmqsock = utils.create_fifo()
 
         # Load ODR-DabMux configuration into memory
-        self.config = ODRMuxConfig(self._zmqsock)
+        self.config = ODRMuxConfig(self._zmqsock, self._streams)
         if not self.config.load(self._srvcfg['dab']['mux_config']):
             logger.error(f'Unable to load DAB multiplexer configuration: {muxcfg}')
             return False
@@ -179,7 +150,7 @@ class DABServer():
 
         # Start a watcher thread to process messages from the CAPServer
         try:
-            self._watcher = DABWatcher(self._srvcfg, self._zmqsock, self._q, self._streams)
+            self._watcher = DABWatcher(self._srvcfg, self._q, self._zmqsock, self._streams)
             self._watcher.start()
         except KeyError as e:
             logger.error(f'Unable to start DAB watcher thread, check configuration. {e}')
@@ -199,8 +170,7 @@ class DABServer():
 
         # Remove the ZMQ ODR-DabMux IPC FIFO
         if self._zmqsock != None:
-            os.remove(self._zmqsock)
-            os.rmdir(os.path.dirname(self._zmqsock))
+            utils.remove_fifo(self._zmqsock)
 
         if self._odr != None:
             self._odr.join()

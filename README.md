@@ -54,6 +54,7 @@ TODO
 - [x] Implement stream replacement without use of external scripts
 - [x] TTS
 - [x] Implement ability to cancel announcements
+- [ ] Change Alarm channel/stream replacement DLS text (and change back after cancel)
 - [ ] Configurable label, pty and such for stream replacement/alarm channel
 - [ ] Manual announcement triggering
 - [ ] GUI config - Ensemble announcement

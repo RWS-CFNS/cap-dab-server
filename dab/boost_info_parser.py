@@ -82,7 +82,6 @@ class BoostInfoTree(object):
         return iter(self.subTrees.items())
 
     def __delitem__(self, key):
-        print(key)
         del self.subTrees[key]
 
     def _prettyprint(self, indentLevel=1, first=True):
