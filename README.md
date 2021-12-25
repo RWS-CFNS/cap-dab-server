@@ -14,17 +14,31 @@ Features include:
 
 # Installation
 Requirements:
+- dialog (TUI)
 - ffmpeg (Convert mp3 TTS output to wav)
 - odr-audioenc (DAB/DAB+ Encoder)
 - odr-padenc (DAB PAD Encoder)
 - odr-dabmux (DAB Multiplexer)
 - odr-dabmod (DAB Modulator)
-- dialog (TUI)
 - Python 3.9+
+- python-Flask (HTTP server)
 - python-pyttsx3 (TTS)
 - python-pythondialog (TUI)
-- python-Flask (HTTP server)
+- python-pyzmq (IPC with ODR-mmbTools)
 
+## Debian/Ubuntu
+```
+$ sudo apt install dialog ffmpeg python3 python3-pip
+$ pip3 install --user flask pyttsx3 pythondialog
+```
+
+## macOS
+```
+$ brew install dialog ffmpeg python
+$ pip3 install --user flask pyttsx3 pythondialog
+```
+
+## Windows
 TODO
 
 # Configuration
@@ -51,6 +65,7 @@ TODO
 - [ ] Logging - Add stream logs to GUI
 - [x] Option to use ODR-DabMod config file instead of fifo output
 - [ ] Option to restart threads that have quit
+- [x] Use ZeroMQ ipc instead of telnet for communication with odr-dabmux
 
 # License
 This project is licensed under the GNU General Public License v3.0. See

@@ -156,8 +156,8 @@ class CAPServer():
         # See https://docs.python.org/3/library/xml.html#xml-vulnerabilitiesk
         ver = pyexpat.version_info
         if ver[0] < 2 or ver[1] < 4 or ver[2] < 1:
-            logger.error('PyExpat 2.4.1+ is required but not found on this system')
-            return False
+            logger.warn('PyExpat 2.4.1+ is recommended but not found on this system, update your Python installation')
+            return True
 
         # Remove Flask and werkzeug's default logging handler(s).
         for h in self.app.logger.handlers:
@@ -173,10 +173,10 @@ class CAPServer():
         handler.addFilter(strip_esc)
 
         # Setup the logging file for werkzeug and Flask
-        self.app.logger.addHandler(handler)
-        self.app.logger.setLevel(logging.INFO)
         logging.getLogger('werkzeug').addHandler(handler)
         logging.getLogger('werkzeug').setLevel(logging.INFO)
+        self.app.logger.addHandler(handler)
+        self.app.logger.setLevel(logging.INFO)
 
         # Start the werkzeug/Flask thread
         try:

@@ -70,8 +70,7 @@ else:
                          'stream_config': f'{CONFIG_HOME}/cap-dab-server/streams.ini',
                          'odrbin_path': f'/usr/local/bin',
                          'mux_config': f'{CONFIG_HOME}/cap-dab-server/dabmux.mux',
-                         'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini',
-                         'telnetport': '39899'
+                         'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini'
                         }
     config['cap'] =     {
                          'strict_parsing': 'no',
@@ -429,13 +428,11 @@ def settings():
              'dabmux.mux config file path'),
             ('ODR-DabMod config',   8,  1, config['dab']['mod_config'],       8,  20, 64, MAX_PATH, 0,
              'dabmod.ini config file path'),
-            ('DAB telnetport',      9,  1, config['dab']['telnetport'],       9,  20, 6,  5,        0,
-             'Internally used DabMux telnetport used for signalling announcements'),
-            ('Strict CAP parsing',  10, 1, config['cap']['strict_parsing'],   10, 20, 4,  3,        0,
+            ('Strict CAP parsing',  9,  1, config['cap']['strict_parsing'],   9, 20, 4,  3,        0,
              'Enforce strict CAP XML parsing (yes/no)'),
-            ('CAP server host',     11, 1, config['cap']['host'],             11, 20, 46, 45,       0,
+            ('CAP server host',     10, 1, config['cap']['host'],             10, 20, 46, 45,       0,
              'IP address to host CAP HTTP server on (IPv4/IPv6)'),
-            ('CAP server port',     12, 1, config['cap']['port'],             12, 20, 6,  5,        0,
+            ('CAP server port',     11, 1, config['cap']['port'],             11, 20, 6,  5,        0,
              'Port to host CAP HTTP server on')
             ])
 
@@ -450,13 +447,12 @@ def settings():
                                 'stream_config': elems[4],
                                 'odrbin_path': elems[5],
                                 'mux_config': elems[6],
-                                'mod_config': elems[7],
-                                'telnetport': elems[8]
+                                'mod_config': elems[7]
                                 }
             config['cap'] = {
-                                'strict_parsing': elems[9],
-                                'host': elems[10],
-                                'port': elems[11]
+                                'strict_parsing': elems[8],
+                                'host': elems[9],
+                                'port': elems[10]
                                 }
             with open(server_config, 'w') as config_file:
                 config.write(config_file)
