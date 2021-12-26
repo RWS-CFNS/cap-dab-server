@@ -68,7 +68,7 @@ class DABStream(threading.Thread):
             audioenc_cmdline = [
                                 f'{self.binpath}/odr-audioenc',
                                 f'--bitrate={self.streamcfg["bitrate"]}',
-                                '-D',
+                                 '-D',
                                 f'--output=ipc://{self.outsock}',
                                 f'--pad-socket={self.name}',
                                 f'--pad={self.streamcfg["pad_length"]}'
@@ -95,6 +95,7 @@ class DABStream(threading.Thread):
             if pad_enable:
                 padenc_cmdline = [
                                 f'{self.binpath}/odr-padenc',
+                                 '--charset=0',
                                 f'--output={self.name}'
                                 ]
 

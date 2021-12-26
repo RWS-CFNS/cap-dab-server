@@ -150,7 +150,7 @@ class DABServer():
 
         # Start a watcher thread to process messages from the CAPServer
         try:
-            self._watcher = DABWatcher(self._srvcfg, self._q, self._zmqsock, self._streams)
+            self._watcher = DABWatcher(self._srvcfg, self._q, self._zmqsock, self._streams, self.config)
             self._watcher.start()
         except KeyError as e:
             logger.error(f'Unable to start DAB watcher thread, check configuration. {e}')
@@ -180,9 +180,6 @@ class DABServer():
     def restart(self):
         if self.config == None:
             return False
-
-        # Save changes made to the multiplexer config
-        self.config.write()
 
         # Shutdown all DAB threads
         self.stop()

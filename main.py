@@ -292,7 +292,7 @@ def services_config():
 
                     # TODO check if Service ID is already in use
 
-                    if cid != Dialog.CANCEL:
+                    if sid != Dialog.CANCEL:
                         if sid != None:
                             dab.config.cfg.services[service]['id'] = sid
 

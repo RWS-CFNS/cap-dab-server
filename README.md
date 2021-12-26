@@ -15,6 +15,7 @@ Features include:
 # Installation
 Requirements:
 - dialog (TUI)
+- espeak-ng (on Linux only)
 - ffmpeg (Convert mp3 TTS output to wav)
 - odr-audioenc (DAB/DAB+ Encoder)
 - odr-padenc (DAB PAD Encoder)
@@ -28,14 +29,14 @@ Requirements:
 
 ## Debian/Ubuntu
 ```
-$ sudo apt install dialog ffmpeg python3 python3-pip
-$ pip3 install --user flask pyttsx3 pythondialog
+$ sudo apt install dialog espeak-ng libespeak-ng-libespeak1 ffmpeg python3 python3-pip
+$ pip3 install --user flask pyttsx3 pythondialog pyzmq
 ```
 
 ## macOS
 ```
 $ brew install dialog ffmpeg python
-$ pip3 install --user flask pyttsx3 pythondialog
+$ pip3 install --user flask pyttsx3 pythondialog pyzmq
 ```
 
 ## Windows

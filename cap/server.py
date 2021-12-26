@@ -157,7 +157,6 @@ class CAPServer():
         ver = pyexpat.version_info
         if ver[0] < 2 or ver[1] < 4 or ver[2] < 1:
             logger.warn('PyExpat 2.4.1+ is recommended but not found on this system, update your Python installation')
-            return True
 
         # Remove Flask and werkzeug's default logging handler(s).
         for h in self.app.logger.handlers:

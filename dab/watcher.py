@@ -36,18 +36,18 @@ logger = logging.getLogger('server.dab')
 # DAB queue watcher and message processing
 # This thread handles messages received from the CAPServer
 class DABWatcher(threading.Thread):
-    def __init__(self, config, q, zmqsock, streams):
+    def __init__(self, config, q, zmqsock, streams, muxcfg):
         threading.Thread.__init__(self)
 
         self.zmq = zmq.Context()
-        self.zmqsock = zmqsock
 
         self.q = q
+        self.zmqsock = zmqsock
         self.streams = streams
+        self.muxcfg = muxcfg.cfg
 
         self.alarm = config['warning'].getboolean('alarm')
         self.replace = config['warning'].getboolean('replace')
-
         self.alarmpath = f'{config["general"]["logdir"]}/streams/sub-alarm'
 
         self.tts = pyttsx3.init()
@@ -157,7 +157,27 @@ class DABWatcher(threading.Thread):
                     # Stop the alarm announcement and switch services back to their original streams
                     for s, t, c, o in self.streams.streams:
                         # TODO change back dls and label
-                        self.streams.setcfg(s)
+                        if self.alarm:
+                            out = mux_send(muxsock, 'set alarm active 0')
+                            logger.info(f'Deactivating alarm announcement, res: {out}')
+
+                        if self.replace:
+                            # Restore the old stream
+                            self.streams.setcfg(s)
+
+                            service = 'srv-audio' # FIXME don't hardcode, do for each
+
+                            # Restore the original service labels
+                            # FIXME generate label if no shortlabel
+                            # FIXME settings label errors out if there's spaces
+                            label = self.muxcfg.services[service]['label']
+                            shortlabel = self.muxcfg.services[service]['shortlabel']
+                            pty = self.muxcfg.services[service]['pty']
+
+                            out = mux_send(muxsock, f'set {service} label {label},{shortlabel}')
+                            logger.info(f'Restoring original Service Label on service {service}, res: {out}')
+                            out = mux_send(muxsock, f'set {service} pty {pty}')
+                            logger.info(f'Restoring original PTY on service {service}, res: {out}')
 
                     self.q.task_done()
                     continue
@@ -217,6 +237,23 @@ class DABWatcher(threading.Thread):
 
                     # Modify the stream config in memory so all streams correspond to the alarm stream
                     for s, t, c, o in self.streams.streams:
+                        service = 'srv-audio' # FIXME don't hardcode, do for each
+
+                        # Restore the original service labels
+                        label = 'NL-Alert'
+                        shortlabel = label
+                        pty = '3'
+                        #label = self.muxcfg.services['srv-alarm']['label']
+                        #shortlabel = self.muxcfg.services['srv-alarm']['shortlabel']
+                        #pty = self.muxcfg.services['srv-alarm']['pty']
+
+                        # FIXME TODO find services via component config!
+                        # Replace all service labels, pty with the ones from srv-alarm
+                        out = mux_send(muxsock, f'set {service} label {label},{shortlabel}')
+                        logger.info(f'setting Alarm Service Label on service {service}, res: {out}')
+                        out = mux_send(muxsock, f'set {service} pty {pty}')
+                        logger.info(f'Setting INFO PTY on service {service}, res: {out}')
+
                         # Create a new config copy
                         cfg = copy.deepcopy(c)
 
@@ -226,14 +263,9 @@ class DABWatcher(threading.Thread):
                         cfg['dls_enable'] = 'yes'
                         cfg['mot_enable'] = 'no'
 
-                        # FIXME TODO find services via component config!
-                        # Replace all service labels, pty with the ones from srv-alarm
-                        out = mux_send(muxsock, 'set srv-audio label NL-Alert,NL-Alert')
-                        logger.info(f'setting Alarm Service Label on service {s}, res: {out}')
-                        out = mux_send(muxsock, 'set srv-audio pty 3')
-                        logger.info(f'Setting INFO PTY on service {s}, res: {out}')
+                        # TODO change DLS
 
-                        # Then, restart all modified streams
+                        # Then, restart all modified streams with the emergency stream
                         self.streams.setcfg(s, cfg)
 
                 self.q.task_done()
