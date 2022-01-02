@@ -1,7 +1,7 @@
 #
-#    CFNS - Rijkswaterstaat CIV, Delft © 2021 <cfns@rws.nl>
+#    CFNS - Rijkswaterstaat CIV, Delft © 2021 - 2022 <cfns@rws.nl>
 #
-#    Copyright 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+#    Copyright 2021 - 2022 Bastiaan Teeuwen <bastiaan@mkcl.nl>
 #
 #    This file is part of cap-dab-server
 #

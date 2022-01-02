@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 #
-#    CFNS - Rijkswaterstaat CIV, Delft © 2021 <cfns@rws.nl>
+#    CFNS - Rijkswaterstaat CIV, Delft © 2021 - 2022 <cfns@rws.nl>
 #
-#    Copyright 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>
+#    Copyright 2021 - 2022 Bastiaan Teeuwen <bastiaan@mkcl.nl>
 #
 #    This file is part of cap-dab-server
 #
@@ -443,13 +443,13 @@ def settings():
                                 'max_log_size': elems[2],
                                 'queuelimit': elems[3]
                                 }
-            config['dab'] = {
+            config['dab'] =     {
                                 'stream_config': elems[4],
                                 'odrbin_path': elems[5],
                                 'mux_config': elems[6],
                                 'mod_config': elems[7]
                                 }
-            config['cap'] = {
+            config['cap'] =     {
                                 'strict_parsing': elems[8],
                                 'host': elems[9],
                                 'port': elems[10]
@@ -537,7 +537,7 @@ def main_menu():
 def main():
     global cap, dab, streams
 
-    d.set_background_title('CFNS - Rijkswaterstaat CIV, Delft © 2021 - Bastiaan Teeuwen <bastiaan@mkcl.nl>')
+    d.set_background_title('CFNS - Rijkswaterstaat CIV, Delft © 2021 - 2022 | Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
     # Setup a queue for synchronizing data between the CAP and DAB threads
     q = queue.Queue(maxsize=int(config['general']['queuelimit']))
