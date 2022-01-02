@@ -89,7 +89,7 @@ class CAPServer():
 
         # Initialize the CAP parser
         try:
-            cp = CAPParser(self.app, self._strict)
+            cp = CAPParser(self.app, self._strict, self._srvcfg['cap']['identifier'], self._srvcfg['cap']['sender'])
         except Exception as e:
             logger.error(e)
             return flask.Response(status=500)
@@ -100,7 +100,6 @@ class CAPServer():
             return flask.Response(status=400)
 
         if cp.msg_type == CAPParser.TYPE_LINK_TEST:
-            # TODO generate response
             pass
         elif cp.msg_type == CAPParser.TYPE_ALERT:
             try:
@@ -131,7 +130,7 @@ class CAPServer():
             return flask.Response(status=400)
 
         # Generate an appropriate response
-        xml = cp.generate_response()
+        xml = cp.generate_response(cp.identifier, cp.sender, cp.sent)
         return flask.Response(response=xml, status=200, content_type='application/xml; charset=utf-8')
 
     def __init__(self, config, q):

@@ -24,6 +24,7 @@ import logging                          # Logging facilities
 import xml.etree.ElementTree as Xml     # XML parser
 
 logger = logging.getLogger('server.cap')
+msg_index = 0
 
 class CAPParser():
     # Constants
@@ -40,11 +41,14 @@ class CAPParser():
     # timestamp format specified in the CAP v1.2 standard
     TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%S%z'
 
-    def __init__(self, app, strict):
+    def __init__(self, app, strict, identifier, sender):
         self.app = app
 
         # parse stricty, adhering to not only the CAP v1.2 standard but also the NL Subbroker standards
         self.strict = strict
+
+        self.src_identifier = identifier
+        self.src_sender = sender
 
         self.msg_type = None
 
@@ -60,17 +64,20 @@ class CAPParser():
 
     # Generate an acknowledgement
     # This applies to all types of requests as they all expect the same format of acknowledgement.
-    def generate_response(self):
+    def generate_response(self, ref_identifier, ref_sender, ref_sent):
+        global msg_index
+
         capns = self.NS['CAPv1.2']
 
         root = Xml.Element('alert')
         root.attrib = { 'xmlns': self.NS['CAPv1.2'] }
 
         identifier = Xml.SubElement(root, 'identifier')
-        identifier.text = 'cfns.identifier.xxx' # FIXME don't hardcode
+        identifier.text = f'{self.src_identifier}.{msg_index}'
+        msg_index += 1
 
         sender = Xml.SubElement(root, 'sender')
-        sender.text = 'test@test.com' # FIXME don't hardcode
+        sender.text = self.src_sender
 
         sent = Xml.SubElement(root, 'sent')
         sent.text = self.generate_timestamp()
@@ -85,7 +92,7 @@ class CAPParser():
         scope.text = 'Public'
 
         references = Xml.SubElement(root, 'references')
-        references.text = 'TODO' # FIXME don't hardcore, derive from request
+        references.text = f'{ref_identifier},{ref_sender},{ref_sent}'
 
         return Xml.tostring(root, encoding='unicode', xml_declaration=True)
 

@@ -28,9 +28,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
 import configparser                 # Python INI file parser
+import getpass                      # For getting the current user
 import logging                      # Logging facilities
 import logging.handlers             # Logging handlers
 import queue                        # Queue for passing data to the DAB processing thread
+import socket                       # To get the system's hostname
 import string                       # String utilities (for checking if string is hexadecimal)
 import threading                    # Threading support (for running Flask and DAB Mux/Mod in the background)
 import time                         # For sleep support
@@ -75,7 +77,9 @@ else:
     config['cap'] =     {
                          'strict_parsing': 'no',
                          'host': '127.0.0.1',
-                         'port': '39800'
+                         'port': '39800',
+                         'identifier': f'cap-dab-server.{socket.gethostname()}',
+                         'sender': f'{getpass.getuser()}@{socket.gethostname()}'
                         }
     config['warning'] = {
                          'alarm': 'yes',
@@ -512,6 +516,7 @@ def main_menu():
                           ( 'Status',      'View the server status'),
                           ( 'Ensemble',    'Configure DAB ensemble'),
                           ( 'Services',    'Configure DAB services and streams/subchannels'),
+                          ( 'CAP',         'Configure CAP identity'),
                           ( 'Settings',    'Configure general server settings'),
                           ( 'Logs',        'View the server logs'),
                           ( 'Restart',     'Restart one or more server components'),
