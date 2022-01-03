@@ -190,7 +190,7 @@ class CAPServer():
         return True
 
     def stop(self):
-        if self._cap != None:
+        if self._cap is not None:
             self._cap.join()
 
     def restart(self):
@@ -199,7 +199,7 @@ class CAPServer():
         return self.start()
 
     def status(self):
-        if self._cap == None:
+        if self._cap is None:
             return False
 
         return self._cap.is_alive()

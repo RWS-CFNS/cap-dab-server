@@ -246,14 +246,14 @@ These values both represent a hexidecimal value.
                 cid, ecc = _country_config(localtitle, dab.config.cfg.ensemble['id'], dab.config.cfg.ensemble['ecc'])
 
                 if cid != Dialog.CANCEL:
-                    if cid != None and ecc != None:
+                    if cid is not None and ecc is not None:
                         dab.config.cfg.ensemble['id'] = cid
                         dab.config.cfg.ensemble['ecc'] = ecc
             elif tag == 'Label':
                 label, shortlabel = _label_config(localtitle, dab.config.cfg.ensemble['label'], dab.config.cfg.ensemble['shortlabel'])
 
                 if label != Dialog.CANCEL:
-                    if label != None and shortlabel != None:
+                    if label is not None and shortlabel is not None:
                         dab.config.cfg.ensemble['label'] = label
                         dab.config.cfg.ensemble['shortlabel'] = shortlabel
             elif tag == 'Announcements':
@@ -288,10 +288,10 @@ These values both represent a hexidecimal value.
                     # TODO check if Service ID is already in use
 
                     if sid != Dialog.CANCEL:
-                        if sid != None:
+                        if sid is not None:
                             dab.config.cfg.services[service]['id'] = sid
 
-                        if ecc != None:
+                        if ecc is not None:
                             dab.config.cfg.services[service]['ecc'] = ecc
                         else:
                             del dab.config.cfg.services[service]['ecc']
@@ -301,9 +301,9 @@ These values both represent a hexidecimal value.
                                                       dab.config.cfg.services[service]['shortlabel'])
 
                     if label != Dialog.CANCEL:
-                        if label != None:
+                        if label is not None:
                             dab.config.cfg.services[service]['label'] = label
-                        if shortlabel != None:
+                        if shortlabel is not None:
                             dab.config.cfg.services[service]['shortlabel'] = shortlabel
                         else:
                             del dab.config.cfg.services[service]['shortlabel']
@@ -407,52 +407,48 @@ def settings():
                                   item_help=True, help_tags=True, elements=[
             ('Server config',       1,  1, server_config,                     1,  20, 64, MAX_PATH, 2,
              'server.ini config file path'),
+
             ('Log directory',       2,  1, config['general']['logdir'],       2,  20, 64, MAX_PATH, 0,
              'Directory to write log files to'),
+
             ('Max log size',        3,  1, config['general']['max_log_size'], 3,  20, 8,  7,        0,
              'Maximum size per log file in Kb'),
+
             ('CAP-DAB Queue limit', 4,  1, config['general']['queuelimit'],   4,  20, 8,  7,        0,
-             'Maximum number of CAP messages that can be in the queue at one moment'),
+             'Maximum number of CAP messages that can be in the queue at one moment (requires manual restart)'),
+
             ('Streams config',      5,  1, config['dab']['stream_config'],    5,  20, 64, MAX_PATH, 0,
              'streams.ini config file path'),
+
             ('ODR binaries path',   6,  1, config['dab']['odrbin_path'],      6,  20, 64, MAX_PATH, 0,
              'Directory containing ODR-DabMux, ODR-DabMod, ODR-PadEnc and ODR-AudioEnc'),
+
             ('ODR-DabMux config',   7,  1, config['dab']['mux_config'],       7,  20, 64, MAX_PATH, 0,
              'dabmux.mux config file path'),
+
             ('ODR-DabMod config',   8,  1, config['dab']['mod_config'],       8,  20, 64, MAX_PATH, 0,
-             'dabmod.ini config file path'),
-            ('Strict CAP parsing',  9,  1, config['cap']['strict_parsing'],   9, 20, 4,  3,        0,
-             'Enforce strict CAP XML parsing (yes/no)'),
-            ('CAP server host',     10, 1, config['cap']['host'],             10, 20, 46, 45,       0,
-             'IP address to host CAP HTTP server on (IPv4/IPv6)'),
-            ('CAP server port',     11, 1, config['cap']['port'],             11, 20, 6,  5,        0,
-             'Port to host CAP HTTP server on')
+             'dabmod.ini config file path')
             ])
 
         if code == Dialog.OK:
             # Save the changes
             config['general'] = {
-                                'logdir': elems[1],
-                                'max_log_size': elems[2],
-                                'queuelimit': elems[3]
+                                 'logdir':       elems[1],
+                                 'max_log_size': elems[2],
+                                 'queuelimit':   elems[3]
                                 }
             config['dab'] =     {
-                                'stream_config': elems[4],
-                                'odrbin_path': elems[5],
-                                'mux_config': elems[6],
-                                'mod_config': elems[7]
-                                }
-            config['cap'] =     {
-                                'strict_parsing': elems[8],
-                                'host': elems[9],
-                                'port': elems[10]
+                                 'stream_config':elems[4],
+                                 'odrbin_path':  elems[5],
+                                 'mux_config':   elems[6],
+                                 'mod_config':   elems[7]
                                 }
             with open(server_config, 'w') as config_file:
                 config.write(config_file)
 
             # Restart the CAP and DAB server to apply changes
             d.gauge_start('', height=6, width=64, percent=0)
-            cap_restart(0, 50)
+            dab_restart(0, 50)
             dab_restart(50, 100)
             d.gauge_stop()
 
@@ -497,8 +493,48 @@ def log():
             viewlog(f'{logdir}/dabmod.log')
 
 def cap_config():
-    # TODO implement
-    _error('Not Yet Implemented')
+    while True:
+        code, elems = d.mixedform('', title='CAP Configuration', colors=True, ok_label='Save',
+                                  item_help=True, help_tags=True, elements=[
+            ('Strict parsing',      1, 1, config['cap']['strict_parsing'],  1, 20, 4,  3,   0,
+             'Enforce strict CAP XML parsing [yes/no]'),
+
+            ('Server host',         2, 1, config['cap']['host'],            2, 20, 46, 45,  0,
+             'IP address to host CAP HTTP server on (IPv4/IPv6)'),
+
+            ('Server port',         3, 1, config['cap']['port'],            3, 20, 6,  5,   0,
+             'Port to host CAP HTTP server on'),
+
+            ('Identifier prefix',   4, 1, config['cap']['identifier'],      4, 20, 32, 128, 0,
+             'String to prefix to the CAP message identifier: format will be: [prefix]'),
+
+            ('Sender',              5, 1, config['cap']['sender'],          5, 20, 32, 128, 0,
+             'CAP sender identifier')
+            ])
+
+        if code == Dialog.OK:
+            # Check identifier and sender for illegal characters
+            if any(c in ' ,<&' for c in elems[3] + elems[4]):
+                _error('Spaces, commas, < and & not allowed in Identifier and/or Sender.')
+                continue
+
+            # Save the changes
+            config['cap'] = {
+                             'strict_parsing':   elems[0],
+                             'host':             elems[1],
+                             'port':             elems[2],
+                             'identifier':       elems[3],
+                             'sender':           elems[4]
+                            }
+            with open(server_config, 'w') as config_file:
+                config.write(config_file)
+
+            # Restart the CAP server to apply changes
+            d.gauge_start('', height=6, width=64, percent=0)
+            cap_restart()
+            d.gauge_stop()
+
+        break
 
 def announce():
     # TODO implement

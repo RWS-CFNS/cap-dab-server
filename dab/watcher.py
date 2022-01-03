@@ -114,7 +114,7 @@ class DABWatcher(threading.Thread):
                 # Check if there's any expired announcements to be cancelled
                 for ann in announcements:
                     # Expires shouldn't be None, as the parser already check it
-                    if ann['expires'] == None:
+                    if ann['expires'] is None:
                         # In case it does, remove the announcement from the queue
                         logger.error(f'invalid <expires> timestamp format: {ann["expires"]}')
                         announcements.remove(ann)

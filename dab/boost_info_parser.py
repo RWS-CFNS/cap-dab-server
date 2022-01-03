@@ -45,7 +45,7 @@ class BoostInfoTree(object):
         return out
 
     def __len__(self):
-        if self.value == None:
+        if self.value is None:
             return len(self.subTrees)
         else:
             return len(self.value)
@@ -69,7 +69,7 @@ class BoostInfoTree(object):
             self.__setitem__(key, None)
 
         tree = self.subTrees[key][0]
-        if tree.value != None and len(tree.value) > 0:
+        if tree.value is not None and len(tree.value) > 0:
             return tree.value
         else:
             return tree

@@ -36,7 +36,7 @@ class ODRMuxConfig():
         self.oldcfg = None
 
     def load(self, cfgfile):
-        if cfgfile == None:
+        if cfgfile is None:
             return False
 
         self.file = cfgfile
@@ -84,7 +84,7 @@ class ODRMuxConfig():
             return True
 
         # attempt to read the file
-        if cfgfile != None and os.path.isfile(cfgfile):
+        if cfgfile is not None and os.path.isfile(cfgfile):
             self.p.read(cfgfile)
             self.cfg = self.p.getRoot()
 
@@ -148,7 +148,7 @@ class ODRMuxConfig():
         self.oldcfg = copy.deepcopy(self.cfg)
 
     def restore(self):
-        if self.oldcfg == None:
+        if self.oldcfg is None:
             return
 
         self.cfg = self.oldcfg

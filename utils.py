@@ -38,7 +38,7 @@ def logger_strict(logger, msg):
 
 # Create a new fifo (based on an specified path or if path is None, a new temporary file)
 def create_fifo(path=None):
-    if path == None:
+    if path is None:
         # Create a new temporary file if no path was specified
         path = os.path.join(tempfile.mkdtemp(), str(uuid.uuid4()))
         os.mkfifo(path)

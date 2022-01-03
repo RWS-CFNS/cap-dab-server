@@ -89,14 +89,14 @@ class ODRServer(threading.Thread):
             return
 
         # Terminate the modulator and multiplexer
-        if self.mod != None:
+        if self.mod is not None:
             self.mod.terminate()
             if self.mod.poll() is None:
                 logger.info('DAB modulator terminated successfully!')
             else:
                 logger.error('Terminating DAB modulator failed. Attempt quitting manually.')
 
-        if self.mux != None:
+        if self.mux is not None:
             self.mux.terminate()
             if self.mux.poll() is None:
                 logger.info('DAB modulator terminated successfully!')
@@ -165,20 +165,20 @@ class DABServer():
         return True
 
     def stop(self):
-        if self.config == None:
+        if self.config is None:
             return
 
         # Remove the ZMQ ODR-DabMux IPC FIFO
-        if self._zmqsock != None:
+        if self._zmqsock is not None:
             utils.remove_fifo(self._zmqsock)
 
-        if self._odr != None:
+        if self._odr is not None:
             self._odr.join()
-        if self._watcher != None:
+        if self._watcher is not None:
             self._watcher.join()
 
     def restart(self):
-        if self.config == None:
+        if self.config is None:
             return False
 
         # Shutdown all DAB threads
@@ -192,11 +192,11 @@ class DABServer():
 
     # Return the status of the (DAB Server, DAB watcher, DAB Multiplexer, DAB MOdulator)
     def status(self):
-        if self.config == None:
+        if self.config is None:
             return (False, False, False, False)
 
-        server = self._odr.is_alive() if self._odr != None else False
-        watcher = self._watcher.is_alive() if self._watcher != None else False
+        server = self._odr.is_alive() if self._odr is not None else False
+        watcher = self._watcher.is_alive() if self._watcher is not None else False
         # FIXME check these properly
         mux = subproc.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0
         mod = subproc.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0

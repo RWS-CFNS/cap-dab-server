@@ -72,6 +72,7 @@ class CAPParser():
         root = Xml.Element('alert')
         root.attrib = { 'xmlns': self.NS['CAPv1.2'] }
 
+        # TODO include msg type too?
         identifier = Xml.SubElement(root, 'identifier')
         identifier.text = f'{self.src_identifier}.{msg_index}'
         msg_index += 1
@@ -262,7 +263,7 @@ class CAPParser():
             self.msg_type = self.TYPE_CANCEL
 
             self.references = self.__parse_references(root.find(f'CAPv1.2:references', self.NS).text)
-        if self.msg_type == None:
+        if self.msg_type is None:
             logger.error(f'Unknown message type: {msgType}')
 
         return True

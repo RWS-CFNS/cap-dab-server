@@ -113,7 +113,7 @@ class DABStream(threading.Thread):
 
             # quit odr-padenc if odr-audioenc exits for some reason
             if pad_enable:
-                while self.pad.poll() == None:
+                while self.pad.poll() is not None:
                     self.pad.terminate()
 
                 # FIXME doesn't always quit, add .wait()?
@@ -133,14 +133,14 @@ class DABStream(threading.Thread):
 
         self._running = False
 
-        if self.audio != None:
+        if self.audio is not None:
             self.audio.terminate()
         #if self.audio.poll() is None:
         #    pass
         #else:
         #    pass
 
-        if self.pad != None:
+        if self.pad is not None:
             self.pad.terminate()
         #if self.pad.poll() is None:
         #    pass
@@ -225,7 +225,7 @@ class DABStreams():
         for s, t, c, o in self.streams:
             if s == stream:
                 # Restore to the original stream
-                if newcfg == None:
+                if newcfg is None:
                     newcfg = self._streamscfg[stream]
 
                 # Stop the old stream
@@ -242,7 +242,7 @@ class DABStreams():
 
 
     def stop(self):
-        if self._streamscfg == None:
+        if self._streamscfg is None:
             return
 
         for s, t, c, o in self.streams:
@@ -252,7 +252,7 @@ class DABStreams():
         self.streams = []
 
     def restart(self):
-        if self._streamscfg == None:
+        if self._streamscfg is None:
             return False
 
         # Allow sockets some time to unbind
@@ -262,7 +262,7 @@ class DABStreams():
         return self.start()
 
     def status(self):
-        if self._streamscfg == None:
+        if self._streamscfg is None:
             return []
 
         streams = []
