@@ -91,7 +91,7 @@ class CAPServer():
         try:
             cp = CAPParser(self.app, self._strict, self._srvcfg['cap']['identifier'], self._srvcfg['cap']['sender'])
         except Exception as e:
-            logger.error(e)
+            logger.error(f'Unable to start the CAP parser: {e}')
             return flask.Response(status=500)
 
         # Parse the Xml into memory and check if all required elements present
