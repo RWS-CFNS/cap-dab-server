@@ -63,7 +63,8 @@ class DABStream(threading.Thread):
         if pad_enable:
             padlog = open(f'{self.streamdir}/logs/padenc.log', 'ab')
 
-        while self._running:
+        failcounter = 0
+        while self._running and failcounter < 4:
             # Start up odr-audioenc DAB/DAB+ audio encoder
             audioenc_cmdline = [
                                 f'{self.binpath}/odr-audioenc',
@@ -111,16 +112,26 @@ class DABStream(threading.Thread):
             # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
             self.audio.communicate()[0]
 
-            # quit odr-padenc if odr-audioenc exits for some reason
+            # Quit odr-padenc if odr-audioenc exits for some reason
+            self.audio.terminate()
             if pad_enable:
-                while self.pad.poll() is not None:
-                    self.pad.terminate()
+                self.pad.terminate()
 
-                # FIXME doesn't always quit, add .wait()?
+                # Wait max. 5 seconds for odr-padenc to terminate
+                try:
+                    self.pad.wait(timeout=5)
+                except subproc.TimeoutExpired as e:
+                    logger.error(f'Unable to terminate odr-padenc for DAB stream "{self.name}". Stopping stream. {e}')
+                    break
 
-            # wait a second to prevent going into an restarting loop and overloading the system
-            # TODO check the return code, and prevent automatically restarting if too many errors occur
-            time.sleep(1)
+            # Wait a second or 2 to prevent going into an restarting loop and overloading the system
+            time.sleep(2)
+
+            # Maintain a failcounter to automatically exit the loop if we are unable to bring the stream up
+            failcounter += 1
+
+        if self._running:
+            logger.error(f'Terminating DAB stream "{self.name}". odr-audioenc failed to start {failcounter} times')
 
         audiolog.close()
         if pad_enable:
@@ -135,17 +146,10 @@ class DABStream(threading.Thread):
 
         if self.audio is not None:
             self.audio.terminate()
-        #if self.audio.poll() is None:
-        #    pass
-        #else:
-        #    pass
-
-        if self.pad is not None:
-            self.pad.terminate()
-        #if self.pad.poll() is None:
-        #    pass
-        #else:
-        #    pass
+            try:
+                self.audio.wait(timeout=5)
+            except subproc.TimeoutExpired as e:
+                logger.error(f'Unable to terminate odr-audioenc for DAB stream "{self.name}". {e}')
 
         # TODO consider deleting the stream directory structure on exiting the thread (or at least add an option in settings)
 

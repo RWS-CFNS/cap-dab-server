@@ -59,6 +59,8 @@ class ODRServer(threading.Thread):
             if not os.access(modbin, os.X_OK):
                 raise Exception(f'DAB Modulator binary not executable: {modbin}')
 
+        self._running = True
+
     def run(self):
         # TODO rotate this log, this is not so straightforward it appears
         muxlog = open(f'{self.logdir}/dabmux.log', 'ab')
@@ -67,19 +69,30 @@ class ODRServer(threading.Thread):
         # Create the FIFO that odr-dabmod outputs to
         utils.create_fifo(self.output)
 
-        # Start up odr-dabmux DAB multiplexer
-        muxlog.write('\n'.encode('utf-8'))
-        self.mux = subproc.Popen((f'{self.binpath}/odr-dabmux', self.muxcfg), stdout=subproc.PIPE, stderr=muxlog)
+        failcounter = 0
+        while self._running and failcounter < 4:
+            # Start up odr-dabmux DAB multiplexer
+            muxlog.write('\n'.encode('utf-8'))
+            self.mux = subproc.Popen((f'{self.binpath}/odr-dabmux', self.muxcfg), stdout=subproc.PIPE, stderr=muxlog)
 
-        # Start up odr-dabmod DAB modulator
-        modlog.write('\n'.encode('utf-8'))
-        self.mod = subproc.Popen((f'{self.binpath}/odr-dabmod', self.modcfg),
-                                 stdin=self.mux.stdout, stdout=subproc.PIPE, stderr=modlog)
+            # Start up odr-dabmod DAB modulator
+            modlog.write('\n'.encode('utf-8'))
+            self.mod = subproc.Popen((f'{self.binpath}/odr-dabmod', self.modcfg),
+                                    stdin=self.mux.stdout, stdout=subproc.PIPE, stderr=modlog)
 
-        # Allow odr-dabmux to receive SIGPIPE if odr-dabmod exits
-        self.mux.stdout.close()
-        # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
-        self.mod.communicate()[0]
+            # Allow odr-dabmux to receive SIGPIPE if odr-dabmod exits
+            self.mux.stdout.close()
+            # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
+            self.mod.communicate()[0]
+
+            # Wait 4 seconds for sockets to unbind
+            time.sleep(4)
+
+            # Maintain a failcounter to automatically exit the loop if we are unable to bring the server up
+            failcounter += 1
+
+        if self._running:
+            logger.error(f'Terminating DAB server. odr-dabmux and/or odr-dabmod failed to start {failcounter} times')
 
         modlog.close()
         muxlog.close()
@@ -88,20 +101,22 @@ class ODRServer(threading.Thread):
         if not self.is_alive():
             return
 
+        self._running = False
+
         # Terminate the modulator and multiplexer
         if self.mod is not None:
             self.mod.terminate()
-            if self.mod.poll() is None:
-                logger.info('DAB modulator terminated successfully!')
-            else:
-                logger.error('Terminating DAB modulator failed. Attempt quitting manually.')
+            try:
+                self.mod.wait(timeout=5)
+            except subproc.TimeoutExpired as e:
+                logger.error('Unable to terminate odr-dabmod. {e}')
 
         if self.mux is not None:
             self.mux.terminate()
-            if self.mux.poll() is None:
-                logger.info('DAB modulator terminated successfully!')
-            else:
-                logger.error('Terminating DAB multiplexer failed. Attempt quitting manually.')
+            try:
+                self.mux.wait(timeout=5)
+            except subproc.TimeoutExpired as e:
+                logger.error('Unable to terminate odr-dabmux. {e}')
 
         # Remove the fifo file that was used as output
         os.remove(self.output)
