@@ -571,7 +571,7 @@ def announce():
             subch = str(value[0].subchannel)
 
             # query the state of the announcement
-            state = bool(int(utils.mux_send(dab.zmqsock, 'get alarm active')))
+            state = bool(int(utils.mux_send(dab.zmqsock, ('get', 'alarm', 'active'))))
 
             menu.append((f'{"* " if state else "  "}{key}', f'Cluster {cluster}: {announcements} (Switch to "{subch}")'))
 
@@ -594,10 +594,10 @@ Announcements prefixed with a * are currently active.
             # Check if the announcement is active or not
             out = ''
             if tag[0] == '*':
-                out = utils.mux_send(dab.zmqsock, f'set {announcement} active 0')
+                out = utils.mux_send(dab.zmqsock, ('set', announcement, 'active', '0'))
                 logger.info(f'Manually deactivating {announcement} announcement, res: {out}')
             else:
-                out = utils.mux_send(dab.zmqsock, f'set {announcement} active 1')
+                out = utils.mux_send(dab.zmqsock, ('set', announcement, 'active', '1'))
                 logger.info(f'Manually activating {announcement} announcement, res: {out}')
 
             # Check if the announcement was successfully activated
@@ -660,7 +660,7 @@ def main():
     # Start the DAB streams
     d.gauge_update(33, 'Starting DAB streams...', update_text=True)
     streams = DABStreams(config)
-    if streams.start():
+    if not streams.start():
         d.gauge_stop()
         d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error', width=60, height=8)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=33)

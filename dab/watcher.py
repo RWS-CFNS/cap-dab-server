@@ -126,7 +126,7 @@ class DABWatcher(threading.Thread):
                     for s, t, c, o in self.streams.streams:
                         # TODO change back dls and label
                         if self.alarm:
-                            out = utils.mux_send(self.zmqsock, 'set alarm active 0')
+                            out = utils.mux_send(self.zmqsock, ('set', 'alarm', 'active', '0'))
                             logger.info(f'Deactivating alarm announcement, res: {out}')
 
                         if self.replace:
@@ -136,15 +136,14 @@ class DABWatcher(threading.Thread):
                             service = 'srv-audio' # FIXME don't hardcode, do for each
 
                             # Restore the original service labels
-                            # FIXME generate label if no shortlabel
-                            # FIXME settings label errors out if there's spaces
+                            # FIXME generate shortlabel if there's no shortlabel
                             label = str(self.muxcfg.services[service]['label'])
                             shortlabel = str(self.muxcfg.services[service]['shortlabel'])
                             pty = str(self.muxcfg.services[service]['pty'])
 
-                            out = utils.mux_send(self.zmqsock, f'set {service} label {label},{shortlabel}')
+                            out = utils.mux_send(self.zmqsock, ('set', service, 'label', f'{label},{shortlabel}'))
                             logger.info(f'Restoring original Service Label on service {service}, res: {out}')
-                            out = utils.mux_send(self.zmqsock, f'set {service} pty {pty}')
+                            out = utils.mux_send(self.zmqsock, ('set', service, 'pty', pty))
                             logger.info(f'Restoring original PTY on service {service}, res: {out}')
 
                     self.q.task_done()
@@ -196,7 +195,7 @@ class DABWatcher(threading.Thread):
                 # Signal the alarm announcement if enabled in settings
                 if self.alarm:
                     # TODO start later if effective is later than current time
-                    out = utils.mux_send(self.zmqsock, 'set alarm active 1')
+                    out = utils.mux_send(self.zmqsock, ('set', 'alarm', 'active', '1'))
                     logger.info(f'Activating alarm announcement, res: {out}')
 
                 # Perform channel replacement if enabled in settings
@@ -217,9 +216,9 @@ class DABWatcher(threading.Thread):
 
                         # FIXME TODO find services via component config!
                         # Replace all service labels, pty with the ones from srv-alarm
-                        out = utils.mux_send(self.zmqsock, f'set {service} label {label},{shortlabel}')
+                        out = utils.mux_send(self.zmqsock, ('set', service, 'label', f'{label},{shortlabel}'))
                         logger.info(f'setting Alarm Service Label on service {service}, res: {out}')
-                        out = utils.mux_send(self.zmqsock, f'set {service} pty {pty}')
+                        out = utils.mux_send(self.zmqsock, ('set', service, 'pty', pty))
                         logger.info(f'Setting INFO PTY on service {service}, res: {out}')
 
                         # Create a new config copy

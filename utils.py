@@ -72,11 +72,8 @@ def remove_fifo(path):
         pass
 
 # Send a message over ZeroMQ to ODR-DabMux
-def mux_send(sock, msg):
+def mux_send(sock, msgs):
     # TODO handle failed scenario
-
-    msgs = msg.split(' ')
-    res = ''
 
     # Perform a quick ping test
     sock.send(b'ping')
@@ -95,6 +92,8 @@ def mux_send(sock, msg):
 
     # Wait for the results
     data = sock.recv_multipart()
+    res = ''
+
     for i, part in enumerate(data):
         res += part.decode()
 
