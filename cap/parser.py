@@ -22,9 +22,10 @@
 import datetime                         # Date and time manipulator
 import logging                          # Logging facilities
 import xml.etree.ElementTree as Xml     # XML parser
+import utils
 
 logger = logging.getLogger('server.cap')
-msg_index = 0
+msg_counter = 0
 
 class CAPParser():
     # Constants
@@ -65,7 +66,7 @@ class CAPParser():
     # Generate an acknowledgement
     # This applies to all types of requests as they all expect the same format of acknowledgement.
     def generate_response(self, ref_identifier, ref_sender, ref_sent):
-        global msg_index
+        global msg_counter
 
         capns = self.NS['CAPv1.2']
 
@@ -74,8 +75,8 @@ class CAPParser():
 
         # TODO include msg type too?
         identifier = Xml.SubElement(root, 'identifier')
-        identifier.text = f'{self.src_identifier}.{msg_index}'
-        msg_index += 1
+        identifier.text = f'{self.src_identifier}.{msg_counter}'
+        msg_counter += 1
 
         sender = Xml.SubElement(root, 'sender')
         sender.text = self.src_sender

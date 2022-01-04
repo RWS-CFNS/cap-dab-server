@@ -40,6 +40,15 @@ from dialog import Dialog           # Beautiful dialogs using the external progr
 from cap.server import CAPServer    # CAP server
 from dab.server import DABServer    # DAB server
 from dab.streams import DABStreams  # DAB streams
+import utils
+
+# Types of (supported) DAB announcements
+ANNOUNCEMENT_TYPES = (
+                      'Alarm', 'Traffic', 'Travel',
+                      'Warning', 'News', 'Weather',
+                      'Event', 'Special', 'ProgrammeInfo',
+                      'Sports', 'Finance'
+                     )
 
 # Max path length from limits.h
 MAX_PATH = os.pathconf('/', 'PC_PATH_MAX')
@@ -75,11 +84,11 @@ else:
                          'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini'
                         }
     config['cap'] =     {
-                         'strict_parsing': 'no',
                          'host': '127.0.0.1',
                          'port': '39800',
                          'identifier': f'cap-dab-server.{socket.gethostname()}',
-                         'sender': f'{getpass.getuser()}@{socket.gethostname()}'
+                         'sender': f'{getpass.getuser()}@{socket.gethostname()}',
+                         'strict_parsing': 'no'
                         }
     config['warning'] = {
                          'alarm': 'yes',
@@ -230,8 +239,12 @@ These values both represent a hexidecimal value.
         localtitle = f'Ensemble - {TITLE}'
 
         def announcements():
-            # TODO implement
-            _error('Not Yet Implemented')
+            pass
+            #code, tags = d.checklist('Please configure the announcements you would like the ensemble to support.',
+            #                        title=f'Warning method - {TITLE}', choices=[
+            #        ('Alarm',    'nt', config['warning'].getboolean('alarm')),
+            #        ('Replace',  '', config['warning'].getboolean('replace'))
+            #        ])
 
         while True:
             code, tag = d.menu('', title=localtitle, cancel_label='Back', choices=[
@@ -243,14 +256,18 @@ These values both represent a hexidecimal value.
             if code in (Dialog.CANCEL, Dialog.ESC):
                 break
             elif tag == 'Country':
-                cid, ecc = _country_config(localtitle, dab.config.cfg.ensemble['id'], dab.config.cfg.ensemble['ecc'])
+                cid, ecc = _country_config(localtitle,
+                                           str(dab.config.cfg.ensemble['id']),
+                                           str(dab.config.cfg.ensemble['ecc']))
 
                 if cid != Dialog.CANCEL:
                     if cid is not None and ecc is not None:
                         dab.config.cfg.ensemble['id'] = cid
                         dab.config.cfg.ensemble['ecc'] = ecc
             elif tag == 'Label':
-                label, shortlabel = _label_config(localtitle, dab.config.cfg.ensemble['label'], dab.config.cfg.ensemble['shortlabel'])
+                label, shortlabel = _label_config(localtitle,
+                                                  str(dab.config.cfg.ensemble['label']),
+                                                  str(dab.config.cfg.ensemble['shortlabel']))
 
                 if label != Dialog.CANCEL:
                     if label is not None and shortlabel is not None:
@@ -282,8 +299,8 @@ These values both represent a hexidecimal value.
                         break
                 elif tag == 'Service ID':
                     sid, ecc = _country_config(localtitle,
-                                               dab.config.cfg.services[service]['id'],
-                                               dab.config.cfg.services[service]['ecc'])
+                                               str(dab.config.cfg.services[service]['id']),
+                                               str(dab.config.cfg.services[service]['ecc']))
 
                     # TODO check if Service ID is already in use
 
@@ -297,8 +314,8 @@ These values both represent a hexidecimal value.
                             del dab.config.cfg.services[service]['ecc']
                 elif tag == 'Label':
                     label, shortlabel = _label_config(localtitle,
-                                                      dab.config.cfg.services[service]['label'],
-                                                      dab.config.cfg.services[service]['shortlabel'])
+                                                      str(dab.config.cfg.services[service]['label']),
+                                                      str(dab.config.cfg.services[service]['shortlabel']))
 
                     if label != Dialog.CANCEL:
                         if label is not None:
@@ -336,7 +353,7 @@ These values both represent a hexidecimal value.
             # Load in services from multiplexer config
             i = 0
             for key, value in dab.config.cfg.services:
-                label = dab.config.cfg.services[key]['label']
+                label = str(dab.config.cfg.services[key]['label']) # TODO CHANGE
                 if not isinstance(label, str):
                     label = ''
 
@@ -394,8 +411,6 @@ These values both represent a hexidecimal value.
             ensemble()
         elif tag == 'Services':
             services()
-        elif tag == 'Subchannels':
-            subchannels()
         elif tag == 'Streams':
             streams()
         elif tag == 'Warning method':
@@ -496,20 +511,20 @@ def cap_config():
     while True:
         code, elems = d.mixedform('', title='CAP Configuration', colors=True, ok_label='Save',
                                   item_help=True, help_tags=True, elements=[
-            ('Strict parsing',      1, 1, config['cap']['strict_parsing'],  1, 20, 4,  3,   0,
-             'Enforce strict CAP XML parsing [yes/no]'),
-
-            ('Server host',         2, 1, config['cap']['host'],            2, 20, 46, 45,  0,
+            ('Server host',         1, 1, config['cap']['host'],            1, 20, 46, 45,  0,
              'IP address to host CAP HTTP server on (IPv4/IPv6)'),
 
-            ('Server port',         3, 1, config['cap']['port'],            3, 20, 6,  5,   0,
+            ('Server port',         2, 1, config['cap']['port'],            2, 20, 6,  5,   0,
              'Port to host CAP HTTP server on'),
 
-            ('Identifier prefix',   4, 1, config['cap']['identifier'],      4, 20, 32, 128, 0,
-             'String to prefix to the CAP message identifier: format will be: [prefix]'),
+            ('Identifier prefix',   3, 1, config['cap']['identifier'],      3, 20, 32, 128, 0,
+             'String to prefix to the CAP message identifier: format will be: {prefix}.{msg_counter}'),
 
-            ('Sender',              5, 1, config['cap']['sender'],          5, 20, 32, 128, 0,
-             'CAP sender identifier')
+            ('Sender',              4, 1, config['cap']['sender'],          4, 20, 32, 128, 0,
+             'CAP sender identifier'),
+
+            ('Strict parsing',      5, 1, config['cap']['strict_parsing'],  5, 20, 4,  3,   0,
+             'Enforce strict CAP XML parsing [yes/no]')
             ])
 
         if code == Dialog.OK:
@@ -520,11 +535,11 @@ def cap_config():
 
             # Save the changes
             config['cap'] = {
-                             'strict_parsing':   elems[0],
-                             'host':             elems[1],
-                             'port':             elems[2],
-                             'identifier':       elems[3],
-                             'sender':           elems[4]
+                             'host':             elems[0],
+                             'port':             elems[1],
+                             'identifier':       elems[2],
+                             'sender':           elems[3],
+                             'strict_parsing':   elems[4]
                             }
             with open(server_config, 'w') as config_file:
                 config.write(config_file)
@@ -537,8 +552,57 @@ def cap_config():
         break
 
 def announce():
-    # TODO implement
-    _error('Not Yet Implemented')
+    def cap_announcements():
+        pass
+
+    while True:
+        # Load in announcements from multiplexer config
+        menu = [('CAP', 'Manually send a CAP alarm announcement')]
+
+        for key, value in dab.config.cfg.ensemble.announcements:
+            cluster = str(value[0].cluster)
+
+            announcements = ''
+            for ann, state in value[0].flags:
+                if str(state[0]) == 'true':
+                    announcements += f'{ann}, '
+            announcements = announcements[:-2]
+
+            subch = str(value[0].subchannel)
+
+            # query the state of the announcement
+            state = bool(int(utils.mux_send(dab.zmqsock, 'get alarm active')))
+
+            menu.append((f'{"* " if state else "  "}{key}', f'Cluster {cluster}: {announcements} (Switch to "{subch}")'))
+
+        code, tag = d.menu('''
+Please select the announcement to signal.
+Announcements prefixed with a * are currently active.
+''', title=f'Manual announcement signalling',
+                        cancel_label='Back', choices=menu)
+
+        if code in (Dialog.CANCEL, Dialog.ESC):
+            break
+        elif tag == 'CAP':
+            # TODO let user fill out form with description, message, etc.
+            #      signal announcement and perform channel replacement if configured
+            _error('Not Yet Implemented')
+            pass
+        elif code == Dialog.OK:
+            announcement = tag[2:]
+
+            # Check if the announcement is active or not
+            out = ''
+            if tag[0] == '*':
+                out = utils.mux_send(dab.zmqsock, f'set {announcement} active 0')
+                logger.info(f'Manually deactivating {announcement} announcement, res: {out}')
+            else:
+                out = utils.mux_send(dab.zmqsock, f'set {announcement} active 1')
+                logger.info(f'Manually activating {announcement} announcement, res: {out}')
+
+            # Check if the announcement was successfully activated
+            if out != 'ok':
+                d.msgbox(f'Error while (de)actvating announcement {announcement}: {out}', title='Error', width=60, height=8)
 
 def restart():
     # TODO implement
@@ -546,15 +610,15 @@ def restart():
 
 def main_menu():
     while True:
-        code, tag = d.menu('Main menu', title='CAP-DAB Server Admin Interface', ok_label='Select', no_cancel=True, choices=[
+        code, tag = d.menu('Main menu', title='CAP-DAB Server', ok_label='Select', no_cancel=True, choices=[
                           ('Status',      'View the server status'),
                           ('DAB',         'Configure the DAB multiplex'),
                           ('CAP',         'Configure the CAP server'),
                           ('Settings',    'Configure general server settings'),
                           ('Logs',        'View the server logs'),
-                          ('Announce',    'Manually trigger announcements on a service'),
+                          ('Announce',    'Manually signal announcements'),
                           ('Restart',     'Restart one or more server components'),
-                          ('Quit',        'Stop the server and quit the admin interface')
+                          ('Quit',        'Stop the server and quit')
                           ])
 
         if code == Dialog.ESC or tag == 'Quit':
@@ -584,25 +648,30 @@ def main():
     q = queue.Queue(maxsize=int(config['general']['queuelimit']))
 
     # Start up CAP server
-    d.gauge_start('Starting CAP Server...', height=6, width=64, percent=0)
+    GAUGE_HEIGHT = 6
+    GAUGE_WIDTH = 64
+    d.gauge_start('Starting CAP Server...', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=0)
     cap = CAPServer(config, q)
     if not cap.start():
-        d.gauge_update(17, 'Failed to start CAP server, please refer to the server logs', update_text=True)
-        time.sleep(4)
+        d.gauge_stop()
+        d.msgbox('Failed to start CAP server, please refer to the server logs', title='Error', width=60, height=8)
+        d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=0)
 
     # Start the DAB streams
     d.gauge_update(33, 'Starting DAB streams...', update_text=True)
     streams = DABStreams(config)
-    if not streams.start():
-        d.gauge_update(50, 'Failed to start one or more DAB streams, please check configuration', update_text=True)
-        time.sleep(4)
+    if streams.start():
+        d.gauge_stop()
+        d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error', width=60, height=8)
+        d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=33)
 
     # Start the DAB server
     d.gauge_update(66, 'Starting DAB server...', update_text=True)
     dab = DABServer(config, q, streams)
     if not dab.start():
-        d.gauge_update(83, 'Failed to start DAB server, please refer to the server logs', update_text=True)
-        time.sleep(4)
+        d.gauge_stop()
+        d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error', width=60, height=8)
+        d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=66)
 
     d.gauge_update(100, 'Ready!', update_text=True)
     time.sleep(0.5)

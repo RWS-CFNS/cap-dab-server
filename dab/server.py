@@ -19,11 +19,13 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
+import atexit                       # For cleaning up ZMQ context upon garbage collection
 import os                           # For file I/O
 import logging                      # Logging facilities
 import subprocess as subproc        # Support for starting subprocesses
 import threading                    # Threading support (for running odr-dabmux and odr-dabmod in the background)
 import time                         # For sleep support
+import zmq                          # For signalling (alarm) announcements to ODR-DabMux
 from dab.watcher import DABWatcher  # DAB CAP message watcher
 from dab.muxcfg import ODRMuxConfig # odr-dabmux config
 import utils
@@ -133,16 +135,21 @@ class DABServer():
         self._watcher = None
         self.config = None
 
-        self._zmqsock = None
+        self._zmq = zmq.Context()
+        self.zmqsock = None
+
+        atexit.register(self.deinit)
+
+    def deinit(self):
+        if self._zmq:
+            self._zmq.destroy(linger=5)
 
     def start(self):
-        logger.info('Starting up DAB ensemble...')
-
         # Create a temporary fifo for IPC with ODR-DabMux over ZMQ
-        self._zmqsock = utils.create_fifo()
+        self._zmqsock_path = utils.create_fifo()
 
         # Load ODR-DabMux configuration into memory
-        self.config = ODRMuxConfig(self._zmqsock, self._streams)
+        self.config = ODRMuxConfig(self._zmqsock_path, self._streams)
         if not self.config.load(self._srvcfg['dab']['mux_config']):
             logger.error(f'Unable to load DAB multiplexer configuration: {muxcfg}')
             return False
@@ -163,9 +170,13 @@ class DABServer():
 
         # TODO check if multiplexer and modulator were successfully started
 
+        # Connect to the multiplexer ZMQ socket
+        self.zmqsock = self._zmq.socket(zmq.REQ)
+        self.zmqsock.connect(f'ipc://{self._zmqsock_path}')
+
         # Start a watcher thread to process messages from the CAPServer
         try:
-            self._watcher = DABWatcher(self._srvcfg, self._q, self._zmqsock, self._streams, self.config)
+            self._watcher = DABWatcher(self._srvcfg, self._q, self.zmqsock, self._streams, self.config)
             self._watcher.start()
         except KeyError as e:
             logger.error(f'Unable to start DAB watcher thread, check configuration. {e}')
@@ -184,8 +195,9 @@ class DABServer():
             return
 
         # Remove the ZMQ ODR-DabMux IPC FIFO
-        if self._zmqsock is not None:
-            utils.remove_fifo(self._zmqsock)
+        if self.zmqsock is not None:
+            self.zmqsock.disconnect(f'ipc://{self._zmqsock_path}')
+            utils.remove_fifo(self._zmqsock_path)
 
         if self._odr is not None:
             self._odr.join()
@@ -198,9 +210,6 @@ class DABServer():
 
         # Shutdown all DAB threads
         self.stop()
-
-        # Allow sockets some time to unbind
-        time.sleep(4)
 
         # Start the server back up
         return self.start()

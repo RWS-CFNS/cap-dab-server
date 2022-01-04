@@ -68,11 +68,11 @@ class BoostInfoTree(object):
         except (KeyError, AssertionError):
             self.__setitem__(key, None)
 
-        tree = self.subTrees[key][0]
-        if tree.value is not None and len(tree.value) > 0:
-            return tree.value
-        else:
-            return tree
+        return self.subTrees[key][0]
+        #if tree.value is not None and len(tree.value) > 0:
+        #    return tree.value
+        #else:
+        return tree
     def __getattr__(self, key):
         if key in ('subTrees', 'value', 'parent', 'lastChild'):
             return object.__getattr__(self, key)
@@ -100,6 +100,8 @@ class BoostInfoTree(object):
                     s += nextLevel + str(t) + ' ' + subTree._prettyprint(indentLevel + 2, False)
             if self.parent is not None:
                 s +=  prefix + '}\n'
+        elif first:
+            return s[1:-2]
 
         return s[:-1] if first else s
 

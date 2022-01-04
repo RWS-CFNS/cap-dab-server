@@ -125,7 +125,8 @@ class DABStream(threading.Thread):
                     break
 
             # Wait a second or 2 to prevent going into an restarting loop and overloading the system
-            time.sleep(2)
+            if self._running:
+                time.sleep(2)
 
             # Maintain a failcounter to automatically exit the loop if we are unable to bring the stream up
             failcounter += 1

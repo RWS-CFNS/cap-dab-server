@@ -73,10 +73,8 @@ class CAPHTTP(threading.Thread):
         self.server.serve_forever()
 
     def join(self):
-        logger.info('Waiting for CAP HTTP server to terminate...')
         self.server.shutdown()
         super().join()
-        logger.info('CAP HTTP server terminated successfully!')
 
 class CAPServer():
     def _index(self):
@@ -149,8 +147,6 @@ class CAPServer():
         self.app.add_url_rule('/', 'index', self._index, methods=['POST'])
 
     def start(self):
-        logger.info('Starting up CAP HTTP server...')
-
         # Check if the version of PyExpat is vulnerable to XML DDoS attacks (version 2.4.1+).
         # See https://docs.python.org/3/library/xml.html#xml-vulnerabilitiesk
         ver = pyexpat.version_info
@@ -199,7 +195,4 @@ class CAPServer():
         return self.start()
 
     def status(self):
-        if self._cap is None:
-            return False
-
-        return self._cap.is_alive()
+        return self._cap.is_alive() if self._cap is not None else False

@@ -27,9 +27,9 @@ import os                           # For file I/O
 import pyttsx3                      # Text To Speech engine frontend
 import queue                        # Queue for passing data to the DAB processing thread
 import subprocess as subproc        # For spawning ffmpeg to convert mp3 to wav
-import zmq                          # For signalling (alarm) announcements to ODR-DabMux
 import threading                    # Threading support (for running Mux and Mod in the background)
 from cap.parser import CAPParser    # CAP XML parser (internal)
+import utils
 
 logger = logging.getLogger('server.dab')
 
@@ -38,8 +38,6 @@ logger = logging.getLogger('server.dab')
 class DABWatcher(threading.Thread):
     def __init__(self, config, q, zmqsock, streams, muxcfg):
         threading.Thread.__init__(self)
-
-        self.zmq = zmq.Context()
 
         self.q = q
         self.zmqsock = zmqsock
@@ -78,36 +76,6 @@ class DABWatcher(threading.Thread):
             else:
                 logger.warn(f'Unsupported TTS backend, please contact the developer: {backend}')
                 return ''
-
-        # Connect to the multiplexer ZMQ socket
-        muxsock = self.zmq.socket(zmq.REQ)
-        muxsock.connect(f'ipc://{self.zmqsock}')
-
-        def mux_send(sock, msg):
-            msgs = msg.split(' ')
-            res = ''
-
-            # Perform a quick ping test
-            sock.send(b'ping')
-            data = sock.recv_multipart()
-            if data[0].decode() != 'ok':
-                return None
-
-            # Send our actual command
-            for i, part in enumerate(msgs):
-                if i == len(msgs) - 1:
-                    f = 0
-                else:
-                    f = zmq.SNDMORE
-
-                sock.send(part.encode(), flags=f)
-
-            # Wait for the results
-            data = sock.recv_multipart()
-            for i, part in enumerate(data):
-                res += part.decode()
-
-            return res
 
         while self._running:
             try:
@@ -158,7 +126,7 @@ class DABWatcher(threading.Thread):
                     for s, t, c, o in self.streams.streams:
                         # TODO change back dls and label
                         if self.alarm:
-                            out = mux_send(muxsock, 'set alarm active 0')
+                            out = utils.mux_send(self.zmqsock, 'set alarm active 0')
                             logger.info(f'Deactivating alarm announcement, res: {out}')
 
                         if self.replace:
@@ -170,13 +138,13 @@ class DABWatcher(threading.Thread):
                             # Restore the original service labels
                             # FIXME generate label if no shortlabel
                             # FIXME settings label errors out if there's spaces
-                            label = self.muxcfg.services[service]['label']
-                            shortlabel = self.muxcfg.services[service]['shortlabel']
-                            pty = self.muxcfg.services[service]['pty']
+                            label = str(self.muxcfg.services[service]['label'])
+                            shortlabel = str(self.muxcfg.services[service]['shortlabel'])
+                            pty = str(self.muxcfg.services[service]['pty'])
 
-                            out = mux_send(muxsock, f'set {service} label {label},{shortlabel}')
+                            out = utils.mux_send(self.zmqsock, f'set {service} label {label},{shortlabel}')
                             logger.info(f'Restoring original Service Label on service {service}, res: {out}')
-                            out = mux_send(muxsock, f'set {service} pty {pty}')
+                            out = utils.mux_send(self.zmqsock, f'set {service} pty {pty}')
                             logger.info(f'Restoring original PTY on service {service}, res: {out}')
 
                     self.q.task_done()
@@ -228,7 +196,7 @@ class DABWatcher(threading.Thread):
                 # Signal the alarm announcement if enabled in settings
                 if self.alarm:
                     # TODO start later if effective is later than current time
-                    out = mux_send(muxsock, 'set alarm active 1')
+                    out = utils.mux_send(self.zmqsock, 'set alarm active 1')
                     logger.info(f'Activating alarm announcement, res: {out}')
 
                 # Perform channel replacement if enabled in settings
@@ -243,15 +211,15 @@ class DABWatcher(threading.Thread):
                         label = 'NL-Alert'
                         shortlabel = label
                         pty = '3'
-                        #label = self.muxcfg.services['srv-alarm']['label']
-                        #shortlabel = self.muxcfg.services['srv-alarm']['shortlabel']
-                        #pty = self.muxcfg.services['srv-alarm']['pty']
+                        #label = str(self.muxcfg.services['srv-alarm']['label'])
+                        #shortlabel = str(self.muxcfg.services['srv-alarm']['shortlabel'])
+                        #pty = str(self.muxcfg.services['srv-alarm']['pty'])
 
                         # FIXME TODO find services via component config!
                         # Replace all service labels, pty with the ones from srv-alarm
-                        out = mux_send(muxsock, f'set {service} label {label},{shortlabel}')
+                        out = utils.mux_send(self.zmqsock, f'set {service} label {label},{shortlabel}')
                         logger.info(f'setting Alarm Service Label on service {service}, res: {out}')
-                        out = mux_send(muxsock, f'set {service} pty {pty}')
+                        out = utils.mux_send(self.zmqsock, f'set {service} pty {pty}')
                         logger.info(f'Setting INFO PTY on service {service}, res: {out}')
 
                         # Create a new config copy
@@ -271,9 +239,6 @@ class DABWatcher(threading.Thread):
                 self.q.task_done()
             except queue.Empty:
                 pass
-
-        muxsock.disconnect(f'ipc://{self.zmqsock}')
-        self.zmq.destroy(linger=5)
 
     def join(self):
         if not self.is_alive():

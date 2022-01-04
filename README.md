@@ -48,6 +48,9 @@ TODO
 # Warning method
 TODO
 
+# Unsupported
+- OE (Other Ensemble) announcement switching
+
 # TODO
 - [x] Automatically create fifo
 - [x] Stream class
@@ -57,7 +60,7 @@ TODO
 - [x] Implement ability to cancel announcements
 - [ ] Change Alarm channel/stream replacement DLS text (and change back after cancel)
 - [ ] Configurable label, pty and such for stream replacement/alarm channel
-- [ ] Manual announcement triggering
+- [x] Manual announcement triggering
 - [ ] GUI config - Ensemble announcement
 - [ ] GUI config - Service PTY and Announcement
 - [ ] GUI config - Subchannels
@@ -68,6 +71,7 @@ TODO
 - [x] Option to use ODR-DabMod config file instead of fifo output
 - [ ] Option to restart threads that have quit
 - [x] Use ZeroMQ ipc instead of telnet for communication with odr-dabmux
+- [ ] Allow user to select which announcement to use for CAP messages
 
 # License
 This project is licensed under the GNU General Public License v3.0. See

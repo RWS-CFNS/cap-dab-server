@@ -23,6 +23,7 @@ import os       # For file I/O
 import stat     # For checking if output is a FIFO
 import tempfile # For creating a temporary FIFO
 import uuid     # For generating random FIFO file names
+import zmq      # For signalling (alarm) announcements to ODR-DabMux
 
 # Log via logging.error or logging.warning depending on whether strict CAP parsing is enforced or not
 # Return bool:
@@ -69,3 +70,32 @@ def remove_fifo(path):
         os.rmdir(os.path.dirname(path))
     except OSError:
         pass
+
+# Send a message over ZeroMQ to ODR-DabMux
+def mux_send(sock, msg):
+    # TODO handle failed scenario
+
+    msgs = msg.split(' ')
+    res = ''
+
+    # Perform a quick ping test
+    sock.send(b'ping')
+    data = sock.recv_multipart()
+    if data[0].decode() != 'ok':
+        return None
+
+    # Send our actual command
+    for i, part in enumerate(msgs):
+        if i == len(msgs) - 1:
+            f = 0
+        else:
+            f = zmq.SNDMORE
+
+        sock.send(part.encode(), flags=f)
+
+    # Wait for the results
+    data = sock.recv_multipart()
+    for i, part in enumerate(data):
+        res += part.decode()
+
+    return res

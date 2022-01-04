@@ -1,0 +1,440 @@
+FUNCTION  <SNR>38_AllowedToCompleteInBuffer()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:493
+Called 25 times
+Total time:   0.001463
+ Self time:   0.001108
+
+count  total (s)   self (s)
+   25              0.000095   let buftype = getbufvar( a:buffer, '&buftype' )
+                            
+   25              0.000054   if has_key( s:buftype_blacklist, buftype )
+                                return 0
+   25              0.000008   endif
+                            
+   25              0.000059   let filetype = getbufvar( a:buffer, '&filetype' )
+   25              0.000032   if empty( filetype )
+                                let filetype = 'ycm_nofiletype'
+   25              0.000011   endif
+                            
+   25              0.000157   let whitelist_allows = type( g:ycm_filetype_whitelist ) != v:t_dict || has_key( g:ycm_filetype_whitelist, '*' ) || s:HasAnyKey( g:ycm_filetype_whitelist, split( filetype, '\.' ) )
+   25   0.000505   0.000240   let blacklist_allows = type( g:ycm_filetype_blacklist ) != v:t_dict || !s:HasAnyKey( g:ycm_filetype_blacklist, split( filetype, '\.' ) )
+                            
+   25              0.000039   let allowed = whitelist_allows && blacklist_allows
+                            
+   25   0.000209   0.000119   if !allowed || s:DisableOnLargeFile( a:buffer )
+                                return 0
+   25              0.000007   endif
+                            
+   25              0.000018   if allowed
+   25              0.000078     let s:previous_allowed_buffer_number = bufnr( a:buffer )
+   25              0.000006   endif
+   25              0.000021   return allowed
+
+FUNCTION  <SNR>38_ShowHoverResult()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:1414
+Called 1 time
+Total time:   0.000028
+ Self time:   0.000028
+
+count  total (s)   self (s)
+    1              0.000016     call popup_hide( s:cursorhold_popup )
+                            
+    1              0.000006     if empty( a:response )
+    1              0.000003       return
+                                endif
+                            
+                                " Try to position the popup at the cursor, but avoid wrapping. If the
+                                " longest line is > screen width (&columns), then we just have to wrap, and
+                                " place the popup at the leftmost column.
+                                "
+                                " Find the longest line (FIXME: probably doesn't work well for multi-byte)
+                                let lines = split( a:response, "\n" )
+                                let len = max( map( copy( lines ), "len( v:val )" ) )
+                            
+                                let wrap = 0
+                                let col = 'cursor'
+                            
+                                " max width is screen columns minus x padding (2)
+                                if len >= (&columns - 2)
+                                  " There's at least one line > our max - enable word wrap and draw the
+                                  " popup at the leftmost column
+                                  let col = 1
+                                  let wrap = 1
+                                endif
+                            
+                                let s:cursorhold_popup = popup_atcursor(   lines,   {     'col': col,     'wrap': wrap,     'padding': [ 0, 1, 0, 1 ],     'moved': 'word',     'maxwidth': &columns,     'close': 'click',     'fixed': 0,   } )
+                                call setbufvar( winbufnr( s:cursorhold_popup ), '&syntax', b:ycm_hover.syntax )
+
+FUNCTION  <SNR>20_Compile()
+    Defined: ~/.config/vim/bundle/vim-latex-live-preview/plugin/latexlivepreview.vim:72
+Called 1 time
+Total time:   0.000057
+ Self time:   0.000057
+
+count  total (s)   self (s)
+                            
+    1              0.000040     if !exists('b:livepreview_buf_data') || has_key(b:livepreview_buf_data, 'preview_running') == 0
+    1              0.000006         return
+                                endif
+                            
+                                " Change directory to handle properly sourced files with \input and bib
+                                " TODO: get rid of lcd
+                                execute 'lcd ' . b:livepreview_buf_data['root_dir']
+                            
+                                " Write the current buffer in a temporary file
+                                silent exec 'write! ' . b:livepreview_buf_data['tmp_src_file']
+                            
+                                call s:RunInBackground(b:livepreview_buf_data['run_cmd'])
+                            
+                                lcd -
+
+FUNCTION  <SNR>38_DisableOnLargeFile()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:464
+Called 25 times
+Total time:   0.000090
+ Self time:   0.000090
+
+count  total (s)   self (s)
+   25              0.000051   if exists( 'b:ycm_largefile' )
+   25              0.000027     return b:ycm_largefile
+                              endif
+                            
+                              let threshold = g:ycm_disable_for_files_larger_than_kb * 1024
+                              let b:ycm_largefile = threshold > 0 && getfsize( expand( a:buffer ) ) > threshold
+                              if b:ycm_largefile
+                                py3 vimsupport.PostVimMessage( 'YouCompleteMe is disabled in this buffer;' + ' the file exceeded the max size (see YCM options).' )
+                              endif
+                              return b:ycm_largefile
+
+FUNCTION  <SNR>38_OnCursorMovedNormalMode()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:818
+Called 24 times
+Total time:   0.002669
+ Self time:   0.001341
+
+count  total (s)   self (s)
+   24   0.001455   0.000127   if !s:AllowedToCompleteInCurrentBuffer()
+                                return
+   24              0.000010   endif
+                            
+   24              0.001175   py3 ycm_state.OnCursorMoved()
+
+FUNCTION  youcompleteme#GetCommandResponseAsync()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:1252
+Called 1 time
+Total time:   0.001751
+ Self time:   0.001459
+
+count  total (s)   self (s)
+    1   0.000317   0.000025   if !s:AllowedToCompleteInCurrentBuffer()
+                                eval a:callback( '' )
+                                return
+    1              0.000002   endif
+                            
+    1              0.000007   if !get( b:, 'ycm_completing' )
+                                eval a:callback( '' )
+                                return
+    1              0.000001   endif
+                            
+    1              0.000008   if s:pollers.command.id != -1
+                                eval a:callback( '' )
+                                return
+    1              0.000001   endif
+                            
+    1              0.001324   py3 ycm_state.SendCommandRequestAsync( vim.eval( "a:000" ) )
+                            
+    1              0.000051   let s:pollers.command.id = timer_start( s:pollers.command.wait_milliseconds, function( 's:PollCommand', [ 'StringResponse', a:callback ] ) )
+
+FUNCTION  <SNR>38_PollCommand()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:1300
+Called 1 time
+Total time:   0.003380
+ Self time:   0.003324
+
+count  total (s)   self (s)
+    1              0.000255   if py3eval( 'ycm_state.GetCommandRequest() is None' )
+                                " Possible in case of race conditions and things like RestartServer
+                                " But particualrly in the tests
+                                return
+    1              0.000007   endif
+                            
+    1              0.000076   if !py3eval( 'ycm_state.GetCommandRequest().Done()' )
+                                let s:pollers.command.id = timer_start( s:pollers.command.wait_milliseconds, function( 's:PollCommand', [ a:response_func, a:callback ] ) )
+                                return
+    1              0.000002   endif
+                            
+    1   0.000079   0.000051   call s:StopPoller( s:pollers.command )
+                            
+    1              0.002820   let result = py3eval( 'ycm_state.GetCommandRequest().' .a:response_func . '()' )
+                            
+    1   0.000066   0.000038   eval a:callback( result )
+
+FUNCTION  <SNR>25_Remove_Matches()
+    Defined: /opt/homebrew/Cellar/vim/8.2.3950/share/vim/vim82/plugin/matchparen.vim:197
+Called 24 times
+Total time:   0.000247
+ Self time:   0.000247
+
+count  total (s)   self (s)
+   24              0.000123   if exists('w:paren_hl_on') && w:paren_hl_on
+                                silent! call matchdelete(3)
+                                let w:paren_hl_on = 0
+   24              0.000018   endif
+
+FUNCTION  <SNR>38_Hover()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:1375
+Called 1 time
+Total time:   0.002181
+ Self time:   0.000430
+
+count  total (s)   self (s)
+    1              0.000277     if !py3eval( 'ycm_state.NativeFiletypeCompletionUsable()' )
+                                  " Cancel the autocommand if it happens to have been set
+                                  call s:DisableAutoHover()
+                                  return
+    1              0.000004     endif
+                            
+    1              0.000010     if !has_key( b:, 'ycm_hover' )
+                                  let cmds = youcompleteme#GetDefinedSubcommands()
+                                  if index( cmds, 'GetHover' ) >= 0
+                                    let b:ycm_hover = { 'command': 'GetHover', 'syntax': 'markdown', }
+                                  elseif index( cmds, 'GetDoc' ) >= 0
+                                    let b:ycm_hover = { 'command': 'GetDoc', 'syntax': '', }
+                                  elseif index( cmds, 'GetType' ) >= 0
+                                    let b:ycm_hover = { 'command': 'GetType', 'syntax': &syntax, }
+                                  else
+                                    let b:ycm_hover = {}
+                                  endif
+    1              0.000001     endif
+                            
+    1              0.000006     if empty( b:ycm_hover )
+                                  return
+    1              0.000002     endif
+                            
+    1   0.001805   0.000054     call youcompleteme#GetCommandResponseAsync( function( 's:ShowHoverResult' ), b:ycm_hover.command )
+
+FUNCTION  <SNR>38_AllowedToCompleteInCurrentBuffer()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:524
+Called 25 times
+Total time:   0.001620
+ Self time:   0.000157
+
+count  total (s)   self (s)
+   25   0.001607   0.000144   return s:AllowedToCompleteInBuffer( '%' )
+
+FUNCTION  <SNR>38_HasAnyKey()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:479
+Called 25 times
+Total time:   0.000265
+ Self time:   0.000265
+
+count  total (s)   self (s)
+   50              0.000068   for key in a:keys
+   25              0.000041     if has_key( a:dict, key )
+                                  return 1
+   25              0.000009     endif
+   50              0.000037   endfor
+   25              0.000015   return 0
+
+FUNCTION  <SNR>25_Highlight_Matching_Pair()
+    Defined: /opt/homebrew/Cellar/vim/8.2.3950/share/vim/vim82/plugin/matchparen.vim:40
+Called 24 times
+Total time:   0.001535
+ Self time:   0.001288
+
+count  total (s)   self (s)
+                              " Remove any previous match.
+   24   0.000355   0.000108   call s:Remove_Matches()
+                            
+                              " Avoid that we remove the popup menu.
+                              " Return when there are no colors (looks like the cursor jumps).
+   24              0.000091   if pumvisible() || (&t_Co < 8 && !has("gui_running"))
+                                return
+   24              0.000011   endif
+                            
+                              " Get the character under the cursor and check if it's in 'matchpairs'.
+   24              0.000053   let c_lnum = line('.')
+   24              0.000034   let c_col = col('.')
+   24              0.000015   let before = 0
+                            
+   24              0.000046   let text = getline(c_lnum)
+   24              0.000212   let matches = matchlist(text, '\(.\)\=\%'.c_col.'c\(.\=\)')
+   24              0.000030   if empty(matches)
+                                let [c_before, c] = ['', '']
+   24              0.000009   else
+   24              0.000071     let [c_before, c] = matches[1:2]
+   24              0.000006   endif
+   24              0.000182   let plist = split(&matchpairs, '.\zs[:,]')
+   24              0.000052   let i = index(plist, c)
+   24              0.000016   if i < 0
+                                " not found, in Insert mode try character before the cursor
+   24              0.000042     if c_col > 1 && (mode() == 'i' || mode() == 'R')
+                                  let before = strlen(c_before)
+                                  let c = c_before
+                                  let i = index(plist, c)
+   24              0.000014     endif
+   24              0.000011     if i < 0
+                                  " not found, nothing to do
+   24              0.000018       return
+                                endif
+                              endif
+                            
+                              " Figure out the arguments for searchpairpos().
+                              if i % 2 == 0
+                                let s_flags = 'nW'
+                                let c2 = plist[i + 1]
+                              else
+                                let s_flags = 'nbW'
+                                let c2 = c
+                                let c = plist[i - 1]
+                              endif
+                              if c == '['
+                                let c = '\['
+                                let c2 = '\]'
+                              endif
+                            
+                              " Find the match.  When it was just before the cursor move it there for a
+                              " moment.
+                              if before > 0
+                                let has_getcurpos = exists("*getcurpos")
+                                if has_getcurpos
+                                  " getcurpos() is more efficient but doesn't exist before 7.4.313.
+                                  let save_cursor = getcurpos()
+                                else
+                                  let save_cursor = winsaveview()
+                                endif
+                                call cursor(c_lnum, c_col - before)
+                              endif
+                            
+                              if !has("syntax") || !exists("g:syntax_on")
+                                let s_skip = "0"
+                              else
+                                " Build an expression that detects whether the current cursor position is
+                                " in certain syntax types (string, comment, etc.), for use as
+                                " searchpairpos()'s skip argument.
+                                " We match "escape" for special items, such as lispEscapeSpecial, and
+                                " match "symbol" for lispBarSymbol.
+                                let s_skip = '!empty(filter(map(synstack(line("."), col(".")), ''synIDattr(v:val, "name")''), ' . '''v:val =~? "string\\|character\\|singlequote\\|escape\\|symbol\\|comment"''))'
+                                " If executing the expression determines that the cursor is currently in
+                                " one of the syntax types, then we want searchpairpos() to find the pair
+                                " within those syntax types (i.e., not skip).  Otherwise, the cursor is
+                                " outside of the syntax types and s_skip should keep its value so we skip
+                                " any matching pair inside the syntax types.
+                                " Catch if this throws E363: pattern uses more memory than 'maxmempattern'.
+                                try
+                                  execute 'if ' . s_skip . ' | let s_skip = "0" | endif'
+                                catch /^Vim\%((\a\+)\)\=:E363/
+                                  " We won't find anything, so skip searching, should keep Vim responsive.
+                                  return
+                                endtry
+                              endif
+                            
+                              " Limit the search to lines visible in the window.
+                              let stoplinebottom = line('w$')
+                              let stoplinetop = line('w0')
+                              if i % 2 == 0
+                                let stopline = stoplinebottom
+                              else
+                                let stopline = stoplinetop
+                              endif
+                            
+                              " Limit the search time to 300 msec to avoid a hang on very long lines.
+                              " This fails when a timeout is not supported.
+                              if mode() == 'i' || mode() == 'R'
+                                let timeout = exists("b:matchparen_insert_timeout") ? b:matchparen_insert_timeout : g:matchparen_insert_timeout
+                              else
+                                let timeout = exists("b:matchparen_timeout") ? b:matchparen_timeout : g:matchparen_timeout
+                              endif
+                              try
+                                let [m_lnum, m_col] = searchpairpos(c, '', c2, s_flags, s_skip, stopline, timeout)
+                              catch /E118/
+                                " Can't use the timeout, restrict the stopline a bit more to avoid taking
+                                " a long time on closed folds and long lines.
+                                " The "viewable" variables give a range in which we can scroll while
+                                " keeping the cursor at the same position.
+                                " adjustedScrolloff accounts for very large numbers of scrolloff.
+                                let adjustedScrolloff = min([&scrolloff, (line('w$') - line('w0')) / 2])
+                                let bottom_viewable = min([line('$'), c_lnum + &lines - adjustedScrolloff - 2])
+                                let top_viewable = max([1, c_lnum-&lines+adjustedScrolloff + 2])
+                                " one of these stoplines will be adjusted below, but the current values are
+                                " minimal boundaries within the current window
+                                if i % 2 == 0
+                                  if has("byte_offset") && has("syntax_items") && &smc > 0
+                            	let stopbyte = min([line2byte("$"), line2byte(".") + col(".") + &smc * 2])
+                            	let stopline = min([bottom_viewable, byte2line(stopbyte)])
+                                  else
+                            	let stopline = min([bottom_viewable, c_lnum + 100])
+                                  endif
+                                  let stoplinebottom = stopline
+                                else
+                                  if has("byte_offset") && has("syntax_items") && &smc > 0
+                            	let stopbyte = max([1, line2byte(".") + col(".") - &smc * 2])
+                            	let stopline = max([top_viewable, byte2line(stopbyte)])
+                                  else
+                            	let stopline = max([top_viewable, c_lnum - 100])
+                                  endif
+                                  let stoplinetop = stopline
+                                endif
+                                let [m_lnum, m_col] = searchpairpos(c, '', c2, s_flags, s_skip, stopline)
+                              endtry
+                            
+                              if before > 0
+                                if has_getcurpos
+                                  call setpos('.', save_cursor)
+                                else
+                                  call winrestview(save_cursor)
+                                endif
+                              endif
+                            
+                              " If a match is found setup match highlighting.
+                              if m_lnum > 0 && m_lnum >= stoplinetop && m_lnum <= stoplinebottom 
+                                if exists('*matchaddpos')
+                                  call matchaddpos('MatchParen', [[c_lnum, c_col - before], [m_lnum, m_col]], 10, 3)
+                                else
+                                  exe '3match MatchParen /\(\%' . c_lnum . 'l\%' . (c_col - before) . 'c\)\|\(\%' . m_lnum . 'l\%' . m_col . 'c\)/'
+                                endif
+                                let w:paren_hl_on = 1
+                              endif
+
+FUNCTION  <SNR>38_StopPoller()
+    Defined: ~/.config/vim/bundle/YouCompleteMe/autoload/youcompleteme.vim:584
+Called 1 time
+Total time:   0.000028
+ Self time:   0.000028
+
+count  total (s)   self (s)
+    1              0.000008   call timer_stop( a:poller.id )
+    1              0.000015   let a:poller.id = -1
+
+FUNCTIONS SORTED ON TOTAL TIME
+count  total (s)   self (s)  function
+    1   0.003380   0.003324  <SNR>38_PollCommand()
+   24   0.002669   0.001341  <SNR>38_OnCursorMovedNormalMode()
+    1   0.002181   0.000430  <SNR>38_Hover()
+    1   0.001751   0.001459  youcompleteme#GetCommandResponseAsync()
+   25   0.001620   0.000157  <SNR>38_AllowedToCompleteInCurrentBuffer()
+   24   0.001535   0.001288  <SNR>25_Highlight_Matching_Pair()
+   25   0.001463   0.001108  <SNR>38_AllowedToCompleteInBuffer()
+   25   0.000265             <SNR>38_HasAnyKey()
+   24   0.000247             <SNR>25_Remove_Matches()
+   25   0.000090             <SNR>38_DisableOnLargeFile()
+    1   0.000057             <SNR>20_Compile()
+    1   0.000028             <SNR>38_ShowHoverResult()
+    1   0.000028             <SNR>38_StopPoller()
+
+FUNCTIONS SORTED ON SELF TIME
+count  total (s)   self (s)  function
+    1   0.003380   0.003324  <SNR>38_PollCommand()
+    1   0.001751   0.001459  youcompleteme#GetCommandResponseAsync()
+   24   0.002669   0.001341  <SNR>38_OnCursorMovedNormalMode()
+   24   0.001535   0.001288  <SNR>25_Highlight_Matching_Pair()
+   25   0.001463   0.001108  <SNR>38_AllowedToCompleteInBuffer()
+    1   0.002181   0.000430  <SNR>38_Hover()
+   25              0.000265  <SNR>38_HasAnyKey()
+   24              0.000247  <SNR>25_Remove_Matches()
+   25   0.001620   0.000157  <SNR>38_AllowedToCompleteInCurrentBuffer()
+   25              0.000090  <SNR>38_DisableOnLargeFile()
+    1              0.000057  <SNR>20_Compile()
+    1              0.000028  <SNR>38_ShowHoverResult()
+    1              0.000028  <SNR>38_StopPoller()
+
