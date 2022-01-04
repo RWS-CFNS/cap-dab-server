@@ -51,12 +51,10 @@ class BoostInfoTree(object):
             return len(self.value)
 
     def __setitem__(self, key, value=None):
-        newtree = BoostInfoTree(value, self)
         if key in self.subTrees:
-            self.subTrees[key][0].value = value
+            self.subTrees[key].value = value
         else:
-            self.subTrees[key] = [newtree]
-            self.lastChild = newtree
+            self.lastChild = self.subTrees[key] = BoostInfoTree(value, self)
     def __setattr__(self, key, value=None):
         if key in ('subTrees', 'value', 'parent', 'lastChild'):
             return object.__setattr__(self, key, value)
@@ -64,19 +62,24 @@ class BoostInfoTree(object):
 
     def __getitem__(self, key):
         try:
-            assert self.subTrees[key][0]
+            assert self.subTrees[key]
         except (KeyError, AssertionError):
             self.__setitem__(key, None)
 
-        return self.subTrees[key][0]
-        #if tree.value is not None and len(tree.value) > 0:
-        #    return tree.value
-        #else:
-        return tree
+        return self.subTrees[key]
     def __getattr__(self, key):
         if key in ('subTrees', 'value', 'parent', 'lastChild'):
             return object.__getattr__(self, key)
         return self.__getitem__(key)
+
+    def __str__(self):
+        return self._prettyprint()
+
+    def getboolean(self, key):
+        if self.value is not None and len(self.value) > 0:
+            return True if self.value in ('True', 'true', '1') else False
+        else:
+            return None
 
     def __iter__(self):
         return iter(self.subTrees.items())
@@ -95,18 +98,14 @@ class BoostInfoTree(object):
             if self.parent is not None:
                 s += prefix + '{\n'
             nextLevel = ' ' * (indentLevel + 2)
-            for t in self.subTrees:
-                for subTree in self.subTrees[t]:
-                    s += nextLevel + str(t) + ' ' + subTree._prettyprint(indentLevel + 2, False)
+            for key, value in self.subTrees.items():
+                s += nextLevel + key + ' ' + value._prettyprint(indentLevel + 2, False)
             if self.parent is not None:
                 s +=  prefix + '}\n'
         elif first:
             return s[1:-2]
 
         return s[:-1] if first else s
-
-    def __str__(self):
-        return self._prettyprint()
 
 
 class BoostInfoParser(object):

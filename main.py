@@ -560,15 +560,15 @@ def announce():
         menu = [('CAP', 'Manually send a CAP alarm announcement')]
 
         for key, value in dab.config.cfg.ensemble.announcements:
-            cluster = str(value[0].cluster)
+            cluster = str(value.cluster)
 
             announcements = ''
-            for ann, state in value[0].flags:
-                if str(state[0]) == 'true':
+            for ann, state in value.flags:
+                if value.flags.getboolean(state):
                     announcements += f'{ann}, '
             announcements = announcements[:-2]
 
-            subch = str(value[0].subchannel)
+            subch = str(value.subchannel)
 
             # query the state of the announcement
             state = bool(int(utils.mux_send(dab.zmqsock, ('get', 'alarm', 'active'))))
