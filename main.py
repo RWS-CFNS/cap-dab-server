@@ -27,6 +27,9 @@ import os
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
+# Check Python version, need 3.7+ for ordered dictionaries
+assert sys.version_info >= (3, 7)
+
 import configparser                 # Python INI file parser
 import getpass                      # For getting the current user
 import logging                      # Logging facilities
@@ -42,13 +45,133 @@ from dab.server import DABServer    # DAB server
 from dab.streams import DABStreams  # DAB streams
 import utils
 
-# Types of (supported) DAB announcements
-ANNOUNCEMENT_TYPES = (
-                      'Alarm', 'Traffic', 'Travel',
-                      'Warning', 'News', 'Weather',
-                      'Event', 'Special', 'ProgrammeInfo',
-                      'Sports', 'Finance'
-                     )
+# List of (European) DAB countries
+# TODO Add support for Africa, Asia, North America
+COUNTRY_IDS = {
+    'Albania':              (0xE0, 0x9),
+    'Algeria':              (0xE0, 0x2),
+    'Andorra':              (0xE0, 0x3),
+    'Armenia':              (0xE4, 0xA),
+    'Austria':              (0xE0, 0xA),
+    'Azerbaijan':           (0xE3, 0xB),
+    'Azores (Portugal)':    (0xE0, 0x8),
+    'Belgium':              (0xE0, 0x6),
+    'Belarus':              (0xE3, 0xF),
+    'Bosnia Herzegovina':   (0xE4, 0xF),
+    'Bulgaria':             (0xE1, 0x8),
+    'Canaries (Spain)':     (0xE0, 0xE),
+    'Croatia':              (0xE3, 0xC),
+    'Cyprus':               (0xE1, 0x2),
+    'Czech Republic':       (0xE2, 0x2),
+    'Denmark':              (0xE1, 0x9),
+    'Egypt':                (0xE0, 0xF),
+    'Estonia':              (0xE4, 0x2),
+    'Faroe (Denmark)':      (0xE1, 0x9),
+    'Finland':              (0xE1, 0x6),
+    'France':               (0xE1, 0xF),
+    'Georgia':              (0xE4, 0xC),
+    'Germany (ECC: 0xD)':   (0xE0, 0xD),
+    'Germany (ECC: 0x1)':   (0xE0, 0x1),
+    'Gibraltar (UK)':       (0xE1, 0xA),
+    'Greece':               (0xE1, 0x1),
+    'Hungary':              (0xE0, 0xB),
+    'Iceland':              (0xE2, 0xA),
+    'Iraq':                 (0xE1, 0xB),
+    'Ireland':              (0xE3, 0x2),
+    'Israel':               (0xE0, 0x4),
+    'Italy':                (0xE0, 0x5),
+    'Jordan':               (0xE1, 0x5),
+    'Kazakhstan':           (0xE3, 0xD),
+    'Kosovo':               (0xE4, 0x7),
+    'Kyrgyzstan':           (0xE4, 0x3),
+    'Latvia':               (0xE3, 0x9),
+    'Lebanon':              (0xE3, 0xA),
+    'Libya':                (0xE1, 0xD),
+    'Liechtenstein':        (0xE2, 0x9),
+    'Lithuania':            (0xE2, 0xC),
+    'Luxembourg':           (0xE1, 0x7),
+    'Macedonia':            (0xE4, 0x3),
+    'Madeira':              (0xE2, 0x8),
+    'Malta':                (0xE0, 0xC),
+    'Moldova':              (0xE4, 0x1),
+    'Monaco':               (0xE2, 0xB),
+    'Montenegro':           (0xE3, 0x1),
+    'Morocco':              (0xE2, 0x1),
+    'Netherlands':          (0xE3, 0x8),
+    'Norway':               (0xE2, 0xF),
+    'Palestine':            (0xE0, 0x8),
+    'Poland':               (0xE2, 0x3),
+    'Portugal':             (0xE4, 0x8),
+    'Romania':              (0xE1, 0xE),
+    'Russian Federation':   (0xE0, 0x7),
+    'San Marino':           (0xE1, 0x3),
+    'Serbia':               (0xE2, 0xD),
+    'Slovakia':             (0xE2, 0x5),
+    'Slovenia':             (0xE4, 0x9),
+    'Spain':                (0xE2, 0xE),
+    'Sweden':               (0xE3, 0xE),
+    'Switzerland':          (0xE1, 0x4),
+    'Syria':                (0xE2, 0x6),
+    'Tajikistan':           (0xE3, 0x5),
+    'Tunisia':              (0xE2, 0x7),
+    'Turkey':               (0xE3, 0x3),
+    'Turkmenistan':         (0xE4, 0xE),
+    'Ukraine':              (0xE4, 0x6),
+    'United Kingdom':       (0xE1, 0xC),
+    'Uzbekistan':           (0xE4, 0xB),
+    'Vatican':              (0xE2, 0x4)
+}
+
+# List of (supported) DAB announcement types
+ANNOUNCEMENT_TYPES = {
+    'Alarm':        'Alarm announcement (Urgent)',
+    'Traffic':      'Road Traffic flash',
+    'Travel':       'Public Transport flash',
+    'Warning':      'Warning/Service flash (Less urgent compared to Alarm)',
+    'News':         'News flash',
+    'Weather':      'Weather bulletin',
+    'Event':        'Event announcement',
+    'Special':      'Special event',
+    # This should actually be Rad_Info according to ETSI, but the name is different in ODR-DabMux's config
+    'ProgrammeInfo':'Programme Information',
+    'Sports':       'Sport report',
+    'Finance':      'Finance report'
+}
+
+# List of supported DAB Programme Types
+# TODO Add support for North American Programme Types
+PROGRAMME_TYPES = {
+     0: ('None',        'No programme type'),
+     1: ('News',        'News'),
+     2: ('Affairs',     'Current Affairs'),
+     3: ('Info',        'Information'),
+     4: ('Sport',       'Sport'),
+     5: ('Education',   'Education'),
+     6: ('Drama',       'Drama'),
+     7: ('Arts',        'Culture'),
+     8: ('Science',     'Science'),
+     9: ('Talk',        'Varied'),
+    10: ('Pop',         'Pop Music'),
+    11: ('Rock',        'Rock Music'),
+    12: ('Easy',        'Easy Listening Music'),
+    13: ('Classics',    'Light Classical'),
+    14: ('Classics',    'Serious Classical'),
+    15: ('Other_M',     'Other Music'),
+    16: ('Weather',     'Weather/meteorology'),
+    17: ('Finance',     'Finance/Business'),
+    18: ('Children',    'Children\'s programmes'),
+    19: ('Factual',     'Social Affairs'),
+    20: ('Religion',    'Religion'),
+    21: ('Phone_In',    'Phone In'),
+    22: ('Travel',      'Travel'),
+    23: ('Leisure',     'Leisure'),
+    24: ('Jazz',        'Jazz Music'),
+    25: ('Country',     'Country Music'),
+    26: ('Nation_M',    'National Music'),
+    27: ('Oldies',      'Oldies Music'),
+    28: ('Folk',        'Folk Music'),
+    29: ('Document',    'Documentary')
+}
 
 # Max path length from limits.h
 MAX_PATH = os.pathconf('/', 'PC_PATH_MAX')
@@ -176,36 +299,31 @@ def status():
 def dab_config():
     TITLE = 'DAB Configuration'
 
-    # Country ID modification menu, used for both ensemble and DAB services configuration
-    def _country_config(title, cid, ecc):
-        while True:
-            code, elems = d.form('''
-\ZbCountry ID\Zn and \ZbECC\Zn are found in section 5.4 Country Id of ETSI TS 101 756.
-These values both represent a hexidecimal value.
-\ZbCountry ID\Zn (Ensemble) must be padded with 0xFFF.
-\ZbService ID\Zn (Service) is Country ID (0x8) + Service ID (0xDAB) -> 0x8DAB.
-''',                             colors=True, title=f'Service ID and Country - {title}', elements=[
-                                ('Country/Service ID',  1, 1, str(cid)[2:], 1, 20, 5, 4),
-                                ('ECC',                 2, 1, str(ecc)[2:], 2, 20, 3, 2),
-                                ])
-
-            if code == Dialog.OK:
-                # check if the IDs are valid hexadecimal numbers
-                if not all(c in string.hexdigits for c in elems[0]):
-                    _error('Invalid Country/Service ID.')
-                    continue
-                if elems[1] != '' and not all(c in string.hexdigits for c in elems[1]):
-                    _error('Invalid ECC.')
-                    continue
-
-                # check the length of the IDs
-                if len(elems[0]) != 4 or len(elems[1]) not in (0, 2):
-                    _error('Invalid length.\n\ZbCountry ID\Zn must be 4 digits and \ZbECC\Zn 2 digits in length.')
-                    continue
-
-                return (f'0x{elems[0]}', None if elems[1] == '' else f'0x{elems[1]}')
+    # Country ID and ECC modification menu, used for DAB ensemble and service configuration
+    def _country_config(title, ecc, cid, allow_empty=False):
+        if ecc != '':
+            ecc = int(ecc, 16)
+        if cid != '':
+            if len(cid) == 3:
+                cid = int(cid, 16)
             else:
-                return (Dialog.CANCEL, Dialog.CANCEL)
+                cid = int(cid[:-3], 16)
+
+        menu = [(k, f'ECC: {hex(v[0]).upper()}, Country ID: {hex(v[1]).upper()}', bool(v[0] == ecc and v[1] == cid)) for k, v in COUNTRY_IDS.items()]
+
+        if allow_empty:
+            menu.insert(0, ('Empty', 'Don\'t overwrite country ID from the ensemble\'s default', bool(ecc == '')))
+
+        # TODO allow to configure unlisted/custom Country ID and ECC
+        #\ZbCountry ID\Zn and \ZbECC\Zn are found in section 5.4 Country Id of ETSI TS 101 756.
+        #These values both represent a hexidecimal value.
+
+        code, tag = d.radiolist('', title=f'Country - {title}', choices=menu)
+
+        if code == Dialog.OK and tag != 'Empty':
+            return COUNTRY_IDS[tag]
+
+        return (None, None)
 
     # Label and short label renaming menu, used for both ensemble and DAB services configuration
     def _label_config(title, label, shortlabel):
@@ -216,8 +334,8 @@ These values both represent a hexidecimal value.
 
         while True:
             code, elems = d.form('''
-\ZbLabel\Zn cannot be longer than 16 characters.
-\ZbShort Label\Zn cannot be longer than 8 characters and must contain characters from \ZbLabel\Zn.
+\ZbLabel\Zn cannot be longer than 16 characters (REQ).
+\ZbShort Label\Zn cannot be longer than 8 characters and must contain characters from \ZbLabel\Zn (OPT).
 ''',                             colors=True, title=f'Label - {title}', elements=[
                                 ('Label',       1, 1, label, 1, 20, 17, 16),
                                 ('Short Label', 2, 1, shortlabel, 2, 20, 9, 8)
@@ -233,13 +351,25 @@ These values both represent a hexidecimal value.
                     _error('\ZbShort Label\Zn must contain characters from \ZbLabel\Zn.')
                     continue
 
-            return (Dialog.CANCEL, Dialog.CANCEL)
+            return (None, None)
+
+    # Programme Type changing menu
+    def _pty_config(title, curpty):
+        menu = [(v[0], v[1], bool(k == curpty)) for k, v in PROGRAMME_TYPES.items()]
+
+        code, tag = d.radiolist('', title=title, choices=menu)
+
+        if code == Dialog.OK:
+            return next((k for k, v in PROGRAMME_TYPES.items() if v[0] == tag), None)
+
+        return None
 
     def ensemble():
         localtitle = f'Ensemble - {TITLE}'
 
         def announcements():
-            pass
+            # TODO implement
+            _error('Not Yet Implemented')
             #code, tags = d.checklist('Please configure the announcements you would like the ensemble to support.',
             #                        title=f'Warning method - {TITLE}', choices=[
             #        ('Alarm',    'nt', config['warning'].getboolean('alarm')),
@@ -256,23 +386,25 @@ These values both represent a hexidecimal value.
             if code in (Dialog.CANCEL, Dialog.ESC):
                 break
             elif tag == 'Country':
-                cid, ecc = _country_config(localtitle,
-                                           str(dab.config.cfg.ensemble['id']),
-                                           str(dab.config.cfg.ensemble['ecc']))
+                ecc, cid = _country_config(localtitle,
+                                           str(dab.config.cfg.ensemble['ecc']),
+                                           str(dab.config.cfg.ensemble['id']))
 
-                if cid != Dialog.CANCEL:
-                    if cid is not None and ecc is not None:
-                        dab.config.cfg.ensemble['id'] = cid
-                        dab.config.cfg.ensemble['ecc'] = ecc
+                if cid is not None and ecc is not None:
+                    dab.config.cfg.ensemble['id'] = str(hex(cid)) + 'fff'
+                    dab.config.cfg.ensemble['ecc'] = str(hex(ecc))
             elif tag == 'Label':
                 label, shortlabel = _label_config(localtitle,
                                                   str(dab.config.cfg.ensemble['label']),
                                                   str(dab.config.cfg.ensemble['shortlabel']))
 
-                if label != Dialog.CANCEL:
-                    if label is not None and shortlabel is not None:
-                        dab.config.cfg.ensemble['label'] = label
+                if label is not None:
+                    dab.config.cfg.ensemble['label'] = label
+
+                    if shortlabel is not None:
                         dab.config.cfg.ensemble['shortlabel'] = shortlabel
+                    else:
+                        del dab.config.cfg.ensemble['shortlabel']
             elif tag == 'Announcements':
                 announcements()
 
@@ -280,14 +412,19 @@ These values both represent a hexidecimal value.
         def modify(service):
             localtitle = f'{service} - Services - {TITLE}'
 
+            def announcements(service):
+                # TODO implement
+                _error('Not Yet Implemented')
+
             # TODO check if required fields have been entered (label and ID)
 
             while True:
                 code, tag = d.menu('', title=localtitle, extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
-                                  ('Service ID',      'Change the service ID and override the ECC from the ensemble default'),
-                                  ('Label',           'Change the service label'),
-                                  ('Programme Type',  ''),
-                                  ('Announcements',   '')
+                                  ('ID',              'Change the service ID (REQ)'),
+                                  ('Country',         'Override the Country from the ensemble default (OPT)'),
+                                  ('Label',           'Change the service label (REQ)'),
+                                  ('Programme Type',  'Change the programme type (OPT)'),
+                                  ('Announcements',   'Select which announcement to support on this service (OPT)')
                                   ])
 
                 if code in (Dialog.CANCEL, Dialog.ESC):
@@ -297,39 +434,67 @@ These values both represent a hexidecimal value.
                     if yncode == Dialog.OK:
                         del dab.config.cfg.services[service]
                         break
-                elif tag == 'Service ID':
-                    sid, ecc = _country_config(localtitle,
-                                               str(dab.config.cfg.services[service]['id']),
-                                               str(dab.config.cfg.services[service]['ecc']))
+                elif tag == 'ID':
+                    sid = str(dab.config.cfg.services[service]['id'])
+
+                    # TODO generate our own service ID if left blank
+
+                    while True:
+                        code, elems = d.form('''
+The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a service.
+''',                                         title=f'Service ID - {localtitle}', colors=True, elements=[
+                                            ('', 1, 1, sid[3:], 1, 1, 4, 3)
+                                            ])
+
+                        if code == Dialog.OK:
+                            if not all(c in string.hexdigits for c in elems[0]):
+                                _error('\ZbService ID\Zn must be a hexadecimal number')
+                                continue
+
+                            if len(elems[0]) != 3:
+                                _error('Invalid length.\n\ZbService ID\Zn must be 3 hexadecimal digits in length.')
+                                continue
+
+                            if len(sid) == 0:
+                                sid = f'0x{str(dab.config.cfg.ensemble["id"])[2:-3]}'
+
+                            dab.config.cfg.services[service]['id'] = sid[:3] + elems[0]
+
+                        break
+                elif tag == 'Country':
+                    sid = str(dab.config.cfg.services[service]['id'])
+
+                    ecc, cid = _country_config(localtitle, str(dab.config.cfg.services[service]['ecc']), sid, True)
 
                     # TODO check if Service ID is already in use
 
-                    if sid != Dialog.CANCEL:
-                        if sid is not None:
-                            dab.config.cfg.services[service]['id'] = sid
+                    if cid is None and ecc is None:
+                        ensemble_cid = str(dab.config.cfg.ensemble['id'])[2:-3]
 
-                        if ecc is not None:
-                            dab.config.cfg.services[service]['ecc'] = ecc
-                        else:
-                            del dab.config.cfg.services[service]['ecc']
+                        dab.config.cfg.services[service]['id'] = f'0x{ensemble_cid}{sid[3:]}'
+                        del dab.config.cfg.services[service]['ecc']
+                    else:
+                        dab.config.cfg.services[service]['id'] = str(hex(cid)) + sid[3:]
+                        dab.config.cfg.services[service]['ecc'] = str(hex(ecc))
                 elif tag == 'Label':
                     label, shortlabel = _label_config(localtitle,
                                                       str(dab.config.cfg.services[service]['label']),
                                                       str(dab.config.cfg.services[service]['shortlabel']))
 
-                    if label != Dialog.CANCEL:
-                        if label is not None:
-                            dab.config.cfg.services[service]['label'] = label
+                    if label is not None:
+                        dab.config.cfg.services[service]['label'] = label
+
                         if shortlabel is not None:
                             dab.config.cfg.services[service]['shortlabel'] = shortlabel
                         else:
                             del dab.config.cfg.services[service]['shortlabel']
                 elif tag == 'Programme Type':
-                    # TODO implement
-                    _error('Not Yet Implemented')
+                    pty = _pty_config(f'PTY - {localtitle}', int(str(dab.config.cfg.services[service]['pty'])))
+
+                    if pty is not None:
+                        dab.config.cfg.services[service]['pty'] = str(pty)
                 elif tag == 'Announcements':
-                    # TODO implement
-                    _error('Not Yet Implemented')
+                    announcements(service)
 
         def add():
             while True:
@@ -354,8 +519,8 @@ These values both represent a hexidecimal value.
             i = 0
             for key, value in dab.config.cfg.services:
                 label = str(dab.config.cfg.services[key]['label']) # TODO CHANGE
-                if not isinstance(label, str):
-                    label = ''
+                if label == '':
+                    del dab.config.cfg.services[key]['label']
 
                 menu.insert(i, (key, label))
                 i += 1
@@ -374,16 +539,40 @@ These values both represent a hexidecimal value.
         _error('Not Yet Implemented')
 
     def warning_config():
-        code, tags = d.checklist('Select the method by which you want the server to send DAB warning messages',
-                                 title=f'Warning method - {TITLE}', choices=[
-                   ('Alarm',    'DAB native Alarm announcement', config['warning'].getboolean('alarm')),
-                   ('Replace',  'Channel stream replacement', config['warning'].getboolean('replace'))
-                   ])
+        localtitle = 'Warning settings - {TITLE}'
+        def cap_announcement():
+            _error('Not Yet Implemented')
 
-        if code == Dialog.OK:
-            # Save the changes
-            config['warning']['Alarm'] = 'yes' if 'Alarm' in tags else 'no'
-            config['warning']['Replace'] = 'yes' if 'Replace' in tags else 'no'
+        def display():
+            _error('Not Yet Implemented')
+
+        def method():
+            code, tags = d.checklist('Select the method by which you want the server to send DAB warning messages',
+                                    title=f'Method - {localtitle}', choices=[
+                    ('Alarm',    'DAB native Alarm announcement', config['warning'].getboolean('alarm')),
+                    ('Replace',  'Channel stream replacement', config['warning'].getboolean('replace'))
+                    ])
+
+            if code == Dialog.OK:
+                # Save the changes
+                config['warning']['Alarm'] = 'yes' if 'Alarm' in tags else 'no'
+                config['warning']['Replace'] = 'yes' if 'Replace' in tags else 'no'
+
+        while True:
+            code, tag = d.menu('', title=localtitle, cancel_label='Back', choices=[
+                              ('CAP announcement',  'Select which Alarm announcement to use for CAP Alerts'),
+                              ('Display',           'Configure DAB label and PTY to show during warning messages'),
+                              ('Warning method',    'Set the method by which warning messages are sent')
+                              ])
+
+            if code in (Dialog.CANCEL, Dialog.ESC):
+                break
+            elif tag == 'CAP announcement':
+                cap_announcement()
+            elif tag == 'Display':
+                display()
+            elif tag == 'Warning method':
+                method()
 
     # Before doing anything, create a copy of the current DAB config
     dab.config.save()
@@ -393,7 +582,7 @@ These values both represent a hexidecimal value.
                           ('Ensemble',          'Configure the ensemble'),
                           ('Services',          'Add/Modify services'),
                           ('Streams',           'Add/Modify/Set the service streams/subchannels'),
-                          ('Warning method',    'Set the method by which warning messages are sent')
+                          ('Warning settings',  'Configure various settings related to warning messages'),
                           ])
 
         if code == Dialog.EXTRA:
@@ -413,7 +602,7 @@ These values both represent a hexidecimal value.
             services()
         elif tag == 'Streams':
             streams()
-        elif tag == 'Warning method':
+        elif tag == 'Warning settings':
             warning_config()
 
 def settings():

@@ -19,12 +19,11 @@
 
 import copy
 import shlex
-from collections import OrderedDict
 
 class BoostInfoTree(object):
     def __init__(self, value=None, parent=None):
         super(BoostInfoTree, self).__init__()
-        self.subTrees = OrderedDict()
+        self.subTrees = {}
         self.value = value
         self.parent = parent
 
@@ -79,7 +78,7 @@ class BoostInfoTree(object):
         value = self.subTrees[key].value
 
         if value is not None and len(value) > 0:
-            return True if value in ('True', 'true', '1') else False
+            return bool(value in ('True', 'true', '1'))
         else:
             return None
 

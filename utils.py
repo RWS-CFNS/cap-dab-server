@@ -103,6 +103,7 @@ def mux_send(sock, msgs):
 def replace_streams(zmqsock, muxcfg, streams, alarm_on):
     for sname, service in muxcfg.services:
         # Check if this service supports alarm announcements
+        # TODO also support Warning announcement
         alarm = service.announcements.getboolean('Alarm')
         if alarm is None or alarm == False:
             continue
