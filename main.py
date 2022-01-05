@@ -43,135 +43,8 @@ from dialog import Dialog           # Beautiful dialogs using the external progr
 from cap.server import CAPServer    # CAP server
 from dab.server import DABServer    # DAB server
 from dab.streams import DABStreams  # DAB streams
+import dab.types                    # DAB types
 import utils
-
-# List of (European) DAB countries
-# TODO Add support for Africa, Asia, North America
-COUNTRY_IDS = {
-    'Albania':              (0xE0, 0x9),
-    'Algeria':              (0xE0, 0x2),
-    'Andorra':              (0xE0, 0x3),
-    'Armenia':              (0xE4, 0xA),
-    'Austria':              (0xE0, 0xA),
-    'Azerbaijan':           (0xE3, 0xB),
-    'Azores (Portugal)':    (0xE0, 0x8),
-    'Belgium':              (0xE0, 0x6),
-    'Belarus':              (0xE3, 0xF),
-    'Bosnia Herzegovina':   (0xE4, 0xF),
-    'Bulgaria':             (0xE1, 0x8),
-    'Canaries (Spain)':     (0xE0, 0xE),
-    'Croatia':              (0xE3, 0xC),
-    'Cyprus':               (0xE1, 0x2),
-    'Czech Republic':       (0xE2, 0x2),
-    'Denmark':              (0xE1, 0x9),
-    'Egypt':                (0xE0, 0xF),
-    'Estonia':              (0xE4, 0x2),
-    'Faroe (Denmark)':      (0xE1, 0x9),
-    'Finland':              (0xE1, 0x6),
-    'France':               (0xE1, 0xF),
-    'Georgia':              (0xE4, 0xC),
-    'Germany (ECC: 0xD)':   (0xE0, 0xD),
-    'Germany (ECC: 0x1)':   (0xE0, 0x1),
-    'Gibraltar (UK)':       (0xE1, 0xA),
-    'Greece':               (0xE1, 0x1),
-    'Hungary':              (0xE0, 0xB),
-    'Iceland':              (0xE2, 0xA),
-    'Iraq':                 (0xE1, 0xB),
-    'Ireland':              (0xE3, 0x2),
-    'Israel':               (0xE0, 0x4),
-    'Italy':                (0xE0, 0x5),
-    'Jordan':               (0xE1, 0x5),
-    'Kazakhstan':           (0xE3, 0xD),
-    'Kosovo':               (0xE4, 0x7),
-    'Kyrgyzstan':           (0xE4, 0x3),
-    'Latvia':               (0xE3, 0x9),
-    'Lebanon':              (0xE3, 0xA),
-    'Libya':                (0xE1, 0xD),
-    'Liechtenstein':        (0xE2, 0x9),
-    'Lithuania':            (0xE2, 0xC),
-    'Luxembourg':           (0xE1, 0x7),
-    'Macedonia':            (0xE4, 0x3),
-    'Madeira':              (0xE2, 0x8),
-    'Malta':                (0xE0, 0xC),
-    'Moldova':              (0xE4, 0x1),
-    'Monaco':               (0xE2, 0xB),
-    'Montenegro':           (0xE3, 0x1),
-    'Morocco':              (0xE2, 0x1),
-    'Netherlands':          (0xE3, 0x8),
-    'Norway':               (0xE2, 0xF),
-    'Palestine':            (0xE0, 0x8),
-    'Poland':               (0xE2, 0x3),
-    'Portugal':             (0xE4, 0x8),
-    'Romania':              (0xE1, 0xE),
-    'Russian Federation':   (0xE0, 0x7),
-    'San Marino':           (0xE1, 0x3),
-    'Serbia':               (0xE2, 0xD),
-    'Slovakia':             (0xE2, 0x5),
-    'Slovenia':             (0xE4, 0x9),
-    'Spain':                (0xE2, 0xE),
-    'Sweden':               (0xE3, 0xE),
-    'Switzerland':          (0xE1, 0x4),
-    'Syria':                (0xE2, 0x6),
-    'Tajikistan':           (0xE3, 0x5),
-    'Tunisia':              (0xE2, 0x7),
-    'Turkey':               (0xE3, 0x3),
-    'Turkmenistan':         (0xE4, 0xE),
-    'Ukraine':              (0xE4, 0x6),
-    'United Kingdom':       (0xE1, 0xC),
-    'Uzbekistan':           (0xE4, 0xB),
-    'Vatican':              (0xE2, 0x4)
-}
-
-# List of (supported) DAB announcement types
-ANNOUNCEMENT_TYPES = {
-    'Alarm':        'Alarm announcement (Urgent)',
-    'Traffic':      'Road Traffic flash',
-    'Travel':       'Public Transport flash',
-    'Warning':      'Warning/Service flash (Less urgent than Alarm)',
-    'News':         'News flash',
-    'Weather':      'Weather bulletin',
-    'Event':        'Event announcement',
-    'Special':      'Special event',
-    # This should actually be Rad_Info according to ETSI, but the name is different in ODR-DabMux's config
-    'ProgrammeInfo':'Programme Information',
-    'Sports':       'Sport report',
-    'Finance':      'Finance report'
-}
-
-# List of supported DAB Programme Types
-# TODO Add support for North American Programme Types
-PROGRAMME_TYPES = {
-     0: ('None',        'No programme type'),
-     1: ('News',        'News'),
-     2: ('Affairs',     'Current Affairs'),
-     3: ('Info',        'Information'),
-     4: ('Sport',       'Sport'),
-     5: ('Education',   'Education'),
-     6: ('Drama',       'Drama'),
-     7: ('Arts',        'Culture'),
-     8: ('Science',     'Science'),
-     9: ('Talk',        'Varied'),
-    10: ('Pop',         'Pop Music'),
-    11: ('Rock',        'Rock Music'),
-    12: ('Easy',        'Easy Listening Music'),
-    13: ('Classics',    'Light Classical'),
-    14: ('Classics',    'Serious Classical'),
-    15: ('Other_M',     'Other Music'),
-    16: ('Weather',     'Weather/meteorology'),
-    17: ('Finance',     'Finance/Business'),
-    18: ('Children',    'Children\'s programmes'),
-    19: ('Factual',     'Social Affairs'),
-    20: ('Religion',    'Religion'),
-    21: ('Phone_In',    'Phone In'),
-    22: ('Travel',      'Travel'),
-    23: ('Leisure',     'Leisure'),
-    24: ('Jazz',        'Jazz Music'),
-    25: ('Country',     'Country Music'),
-    26: ('Nation_M',    'National Music'),
-    27: ('Oldies',      'Oldies Music'),
-    28: ('Folk',        'Folk Music'),
-    29: ('Document',    'Documentary')
-}
 
 # Max path length from limits.h
 MAX_PATH = os.pathconf('/', 'PC_PATH_MAX')
@@ -215,7 +88,10 @@ else:
                         }
     config['warning'] = {
                          'alarm': 'yes',
-                         'replace': 'yes'
+                         'replace': 'yes',
+                         'label': 'Alert',
+                         'shortlabel': 'Alert',
+                         'pty': '3'
                         }
 
     with open(server_config, 'w') as config_file:
@@ -245,7 +121,7 @@ Invalid entry!
 
 def cap_restart(start=0, target=100):
     d.gauge_update(start, 'Saving changes to CAP config, one moment please...', update_text=True)
-    if cap.restart():
+    if capsrv.restart():
         d.gauge_update(target, 'Successfully saved!', update_text=True)
     else:
         d.gauge_update(int(target / 2), 'Failed to start CAP server, please refer to the server logs', update_text=True)
@@ -254,7 +130,7 @@ def cap_restart(start=0, target=100):
 
 def dab_restart(start=0, target=100):
     d.gauge_update(start, 'Saving changes to DAB config, one moment please...', update_text=True)
-    if dab.restart():
+    if dabsrv.restart():
         d.gauge_update(target, 'Successfully saved!', update_text=True)
     else:
         d.gauge_update(int(target / 2), 'Failed to start DAB server, please refer to the server logs', update_text=True)
@@ -269,8 +145,8 @@ def status():
             return '\Zb\Z1STOPPED\Zn'
 
     while True:
-        cap_server = cap.status()
-        dab_server, dab_watcher, dab_mux, dab_mod = dab.status()
+        cap_server = capsrv.status()
+        dab_server, dab_watcher, dab_mux, dab_mod = dabsrv.status()
 
         # Query the state of the various subcomponents
         states = [
@@ -309,7 +185,7 @@ def dab_config():
             else:
                 cid = int(cid[:-3], 16)
 
-        menu = [(k, f'ECC: {hex(v[0]).upper()}, Country ID: {hex(v[1]).upper()}', bool(v[0] == ecc and v[1] == cid)) for k, v in COUNTRY_IDS.items()]
+        menu = [(k, f'ECC: {hex(v[0]).upper()}, Country ID: {hex(v[1]).upper()}', bool(v[0] == ecc and v[1] == cid)) for k, v in dab.types.COUNTRY_IDS.items()]
 
         if allow_empty:
             menu.insert(0, ('Empty', 'Don\'t overwrite country ID from the ensemble\'s default', bool(ecc == '')))
@@ -321,7 +197,7 @@ def dab_config():
         code, tag = d.radiolist('', title=f'Country - {title}', choices=menu)
 
         if code == Dialog.OK and tag != 'Empty':
-            return COUNTRY_IDS[tag]
+            return dab.types.COUNTRY_IDS[tag]
 
         return (None, None)
 
@@ -355,12 +231,12 @@ def dab_config():
 
     # Programme Type changing menu
     def _pty_config(title, curpty):
-        menu = [(v[0], v[1], bool(k == curpty)) for k, v in PROGRAMME_TYPES.items()]
+        menu = [(v[0], v[1], bool(k == curpty)) for k, v in dab.types.PROGRAMME_TYPES.items()]
 
         code, tag = d.radiolist('', title=title, choices=menu)
 
         if code == Dialog.OK:
-            return next((k for k, v in PROGRAMME_TYPES.items() if v[0] == tag), None)
+            return next((k for k, v in dab.types.PROGRAMME_TYPES.items() if v[0] == tag), None)
 
         return None
 
@@ -387,24 +263,24 @@ def dab_config():
                 break
             elif tag == 'Country':
                 ecc, cid = _country_config(localtitle,
-                                           str(dab.config.cfg.ensemble['ecc']),
-                                           str(dab.config.cfg.ensemble['id']))
+                                           str(dabsrv.config.cfg.ensemble['ecc']),
+                                           str(dabsrv.config.cfg.ensemble['id']))
 
                 if cid is not None and ecc is not None:
-                    dab.config.cfg.ensemble['id'] = str(hex(cid)) + 'fff'
-                    dab.config.cfg.ensemble['ecc'] = str(hex(ecc))
+                    dabsrv.config.cfg.ensemble['id'] = str(hex(cid)) + 'fff'
+                    dabsrv.config.cfg.ensemble['ecc'] = str(hex(ecc))
             elif tag == 'Label':
                 label, shortlabel = _label_config(localtitle,
-                                                  str(dab.config.cfg.ensemble['label']),
-                                                  str(dab.config.cfg.ensemble['shortlabel']))
+                                                  str(dabsrv.config.cfg.ensemble['label']),
+                                                  str(dabsrv.config.cfg.ensemble['shortlabel']))
 
                 if label is not None:
-                    dab.config.cfg.ensemble['label'] = label
+                    dabsrv.config.cfg.ensemble['label'] = label
 
                     if shortlabel is not None:
-                        dab.config.cfg.ensemble['shortlabel'] = shortlabel
+                        dabsrv.config.cfg.ensemble['shortlabel'] = shortlabel
                     else:
-                        del dab.config.cfg.ensemble['shortlabel']
+                        del dabsrv.config.cfg.ensemble['shortlabel']
             elif tag == 'Announcements':
                 announcements()
 
@@ -413,15 +289,15 @@ def dab_config():
             localtitle = f'{service} - Services - {TITLE}'
 
             def announcements(service):
-                dab.config.cfg.services[service].announcements
+                dabsrv.config.cfg.services[service].announcements
 
-                menu = [(k, v, bool(dab.config.cfg.services[service].announcements.getboolean(k))) for k, v in ANNOUNCEMENT_TYPES.items()]
+                menu = [(k, v, bool(dabsrv.config.cfg.services[service].announcements.getboolean(k))) for k, v in dab.types.ANNOUNCEMENT_TYPES.items()]
 
                 code, tags = d.checklist('', title=f'Announcements - {localtitle}', choices=menu)
 
                 if code == Dialog.OK:
-                    for k in ANNOUNCEMENT_TYPES.keys():
-                        dab.config.cfg.services[service].announcements[k] = str(bool(k in tags)).lower()
+                    for k in dab.types.ANNOUNCEMENT_TYPES.keys():
+                        dabsrv.config.cfg.services[service].announcements[k] = str(bool(k in tags)).lower()
 
             # TODO check if required fields have been entered (label and ID)
 
@@ -431,7 +307,8 @@ def dab_config():
                                   ('Country',         'Override the Country from the ensemble default (OPT)'),
                                   ('Label',           'Change the service label (REQ)'),
                                   ('Programme Type',  'Change the programme type (OPT)'),
-                                  ('Announcements',   'Select which announcement to support on this service (OPT)')
+                                  ('Announcements',   'Select which announcement to support on this service (OPT)'),
+                                  ('Clusters',        'Change which announcement cluster this service belong to (OPT)'),
                                   ])
 
                 if code in (Dialog.CANCEL, Dialog.ESC):
@@ -439,10 +316,10 @@ def dab_config():
                 elif code == Dialog.EXTRA:
                     yncode = d.yesno(f'Are you sure you want to delete the service {service}?', width=60, height=6)
                     if yncode == Dialog.OK:
-                        del dab.config.cfg.services[service]
+                        del dabsrv.config.cfg.services[service]
                         break
                 elif tag == 'ID':
-                    sid = str(dab.config.cfg.services[service]['id'])
+                    sid = str(dabsrv.config.cfg.services[service]['id'])
 
                     # TODO generate our own service ID if left blank
 
@@ -463,45 +340,48 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                                 continue
 
                             if len(sid) == 0:
-                                sid = f'0x{str(dab.config.cfg.ensemble["id"])[2:-3]}'
+                                sid = f'0x{str(dabsrv.config.cfg.ensemble["id"])[2:-3]}'
 
-                            dab.config.cfg.services[service]['id'] = sid[:3] + elems[0]
+                            dabsrv.config.cfg.services[service]['id'] = sid[:3] + elems[0]
 
                         break
                 elif tag == 'Country':
-                    sid = str(dab.config.cfg.services[service]['id'])
+                    sid = str(dabsrv.config.cfg.services[service]['id'])
 
-                    ecc, cid = _country_config(localtitle, str(dab.config.cfg.services[service]['ecc']), sid, True)
+                    ecc, cid = _country_config(localtitle, str(dabsrv.config.cfg.services[service]['ecc']), sid, True)
 
                     # TODO check if Service ID is already in use
 
                     if cid is None and ecc is None:
-                        ensemble_cid = str(dab.config.cfg.ensemble['id'])[2:-3]
+                        ensemble_cid = str(dabsrv.config.cfg.ensemble['id'])[2:-3]
 
-                        dab.config.cfg.services[service]['id'] = f'0x{ensemble_cid}{sid[3:]}'
-                        del dab.config.cfg.services[service]['ecc']
+                        dabsrv.config.cfg.services[service]['id'] = f'0x{ensemble_cid}{sid[3:]}'
+                        del dabsrv.config.cfg.services[service]['ecc']
                     else:
-                        dab.config.cfg.services[service]['id'] = str(hex(cid)) + sid[3:]
-                        dab.config.cfg.services[service]['ecc'] = str(hex(ecc))
+                        dabsrv.config.cfg.services[service]['id'] = str(hex(cid)) + sid[3:]
+                        dabsrv.config.cfg.services[service]['ecc'] = str(hex(ecc))
                 elif tag == 'Label':
                     label, shortlabel = _label_config(localtitle,
-                                                      str(dab.config.cfg.services[service]['label']),
-                                                      str(dab.config.cfg.services[service]['shortlabel']))
+                                                      str(dabsrv.config.cfg.services[service]['label']),
+                                                      str(dabsrv.config.cfg.services[service]['shortlabel']))
 
                     if label is not None:
-                        dab.config.cfg.services[service]['label'] = label
+                        dabsrv.config.cfg.services[service]['label'] = label
 
                         if shortlabel is not None:
-                            dab.config.cfg.services[service]['shortlabel'] = shortlabel
+                            dabsrv.config.cfg.services[service]['shortlabel'] = shortlabel
                         else:
-                            del dab.config.cfg.services[service]['shortlabel']
+                            del dabsrv.config.cfg.services[service]['shortlabel']
                 elif tag == 'Programme Type':
-                    pty = _pty_config(f'PTY - {localtitle}', int(str(dab.config.cfg.services[service]['pty'])))
+                    pty = _pty_config(f'PTY - {localtitle}', int(str(dabsrv.config.cfg.services[service]['pty'])))
 
                     if pty is not None:
-                        dab.config.cfg.services[service]['pty'] = str(pty)
+                        dabsrv.config.cfg.services[service]['pty'] = str(pty)
                 elif tag == 'Announcements':
                     announcements(service)
+                elif tag == 'Clusters':
+                    # TODO implement
+                    _error('Not Yet Implemented')
 
         def add():
             while True:
@@ -515,7 +395,7 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 elif ' ' in name:
                     _error('Identifier cannot contain spaces.')
                 else:
-                    dab.config.cfg.services[name]
+                    dabsrv.config.cfg.services[name]
                     modify(name)
                     break
 
@@ -524,10 +404,10 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
 
             # Load in services from multiplexer config
             i = 0
-            for key, value in dab.config.cfg.services:
-                label = str(dab.config.cfg.services[key]['label']) # TODO CHANGE
+            for key, value in dabsrv.config.cfg.services:
+                label = str(dabsrv.config.cfg.services[key]['label']) # TODO CHANGE
                 if label == '':
-                    del dab.config.cfg.services[key]['label']
+                    del dabsrv.config.cfg.services[key]['label']
 
                 menu.insert(i, (key, label))
                 i += 1
@@ -547,10 +427,8 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
 
     def warning_config():
         localtitle = f'Warning settings - {TITLE}'
-        def cap_announcement():
-            _error('Not Yet Implemented')
 
-        def display():
+        def cap_announcement():
             _error('Not Yet Implemented')
 
         def method():
@@ -568,7 +446,8 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
         while True:
             code, tag = d.menu('', title=localtitle, cancel_label='Back', choices=[
                               ('CAP announcement',  'Select which Alarm announcement to use for CAP Alerts'),
-                              ('Display',           'Configure DAB label and PTY to show during warning messages'),
+                              ('Label',             'Configure DAB label to show during warning messages'),
+                              ('Programme Type',    'Configure PTY to show during warning messages'),
                               ('Warning method',    'Set the method by which warning messages are sent')
                               ])
 
@@ -576,13 +455,36 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 break
             elif tag == 'CAP announcement':
                 cap_announcement()
-            elif tag == 'Display':
-                display()
+            elif tag == 'Label':
+                label, shortlabel = _label_config(localtitle,
+                                                  str(config['warning']['label']),
+                                                  str(config['warning']['shortlabel']))
+
+                if label is not None:
+                    config['warning']['label'] = label
+
+                    if shortlabel is not None:
+                        config['warning']['shortlabel'] = shortlabel
+                    else:
+                        config['warning']['shortlabel'] = label[:8]
+
+                # FIXME save in the previous menu not here
+                with open(server_config, 'w') as config_file:
+                    config.write(config_file)
+            elif tag == 'Programme Type':
+                pty = _pty_config(f'PTY - {localtitle}', int(config['warning']['pty']))
+
+                if pty is not None:
+                    config['warning']['pty'] = str(pty)
+
+                # FIXME save in the previous menu not here
+                with open(server_config, 'w') as config_file:
+                    config.write(config_file)
             elif tag == 'Warning method':
                 method()
 
     # Before doing anything, create a copy of the current DAB config
-    dab.config.save()
+    dabsrv.config.save()
 
     while True:
         code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
@@ -594,14 +496,15 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
 
         if code == Dialog.EXTRA:
             # Write config and restart the DAB server
+            # FIXME saving while announcement is playing keeps stream, but doesn't keep alarm announcement
             d.gauge_start('', height=6, width=64, percent=0)
-            dab.config.write()
+            dabsrv.config.write()
             dab_restart()
             d.gauge_stop()
             break
         elif code in (Dialog.CANCEL, Dialog.ESC):
             # Restore the old config
-            dab.config.restore()
+            dabsrv.config.restore()
             break
         elif tag == 'Ensemble':
             ensemble()
@@ -659,7 +562,7 @@ def settings():
 
             # Restart the CAP and DAB server to apply changes
             d.gauge_start('', height=6, width=64, percent=0)
-            dab_restart(0, 50)
+            cap_restart(0, 50)
             dab_restart(50, 100)
             d.gauge_stop()
 
@@ -748,14 +651,17 @@ def cap_config():
         break
 
 def announce():
-    def cap_announcements():
+    def cap_announcement():
+        # TODO let user fill out form with description, message, etc.
+        #      signal announcement and perform stream replacement if configured
+        _error('Not Yet Implemented')
         pass
 
     while True:
         # Load in announcements from multiplexer config
         menu = [('CAP', 'Manually send a CAP alarm announcement')]
 
-        for name, announcement in dab.config.cfg.ensemble.announcements:
+        for name, announcement in dabsrv.config.cfg.ensemble.announcements:
             cluster = str(announcement.cluster)
 
             supported = ''
@@ -767,7 +673,7 @@ def announce():
             subch = str(announcement.subchannel)
 
             # query the state of the announcement
-            state = bool(int(utils.mux_send(dab.zmqsock, ('get', 'alarm', 'active'))))
+            state = bool(int(utils.mux_send(dabsrv.zmqsock, ('get', 'alarm', 'active'))))
 
             menu.append((f'{"* " if state else "  "}{name}', f'Cluster {cluster}: {supported} (Switch to "{subch}")'))
 
@@ -780,20 +686,17 @@ Announcements prefixed with a * are currently active.
         if code in (Dialog.CANCEL, Dialog.ESC):
             break
         elif tag == 'CAP':
-            # TODO let user fill out form with description, message, etc.
-            #      signal announcement and perform stream replacement if configured
-            _error('Not Yet Implemented')
-            pass
+            cap_announcement()
         elif code == Dialog.OK:
             announcement = tag[2:]
 
             # Check if the announcement is active or not
             out = ''
             if tag[0] == '*':
-                out = utils.mux_send(dab.zmqsock, ('set', announcement, 'active', '0'))
+                out = utils.mux_send(dabsrv.zmqsock, ('set', announcement, 'active', '0'))
                 logger.info(f'Manually deactivating {announcement} announcement, res: {out}')
             else:
-                out = utils.mux_send(dab.zmqsock, ('set', announcement, 'active', '1'))
+                out = utils.mux_send(dabsrv.zmqsock, ('set', announcement, 'active', '1'))
                 logger.info(f'Manually activating {announcement} announcement, res: {out}')
 
             # Check if the announcement was successfully activated
@@ -836,7 +739,7 @@ def main_menu():
 
 # Main setup
 def main():
-    global cap, dab, streams
+    global capsrv, dabsrv, streams
 
     d.set_background_title('CFNS - Rijkswaterstaat CIV, Delft © 2021 - 2022 | Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
@@ -847,8 +750,8 @@ def main():
     GAUGE_HEIGHT = 6
     GAUGE_WIDTH = 64
     d.gauge_start('Starting CAP Server...', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=0)
-    cap = CAPServer(config, q)
-    if not cap.start():
+    capsrv = CAPServer(config, q)
+    if not capsrv.start():
         d.gauge_stop()
         d.msgbox('Failed to start CAP server, please refer to the server logs', title='Error', width=60, height=8)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=0)
@@ -863,8 +766,8 @@ def main():
 
     # Start the DAB server
     d.gauge_update(66, 'Starting DAB server...', update_text=True)
-    dab = DABServer(config, q, streams)
-    if not dab.start():
+    dabsrv = DABServer(config, q, streams)
+    if not dabsrv.start():
         d.gauge_stop()
         d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error', width=60, height=8)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=66)
@@ -878,7 +781,7 @@ def main():
 
     # Stop the CAP server
     d.gauge_start('Shutting down CAP Server...', height=6, width=64, percent=0)
-    cap.stop()
+    capsrv.stop()
 
     # Stop the DAB streams
     d.gauge_update(33, 'Shutting down DAB streams...', update_text=True)
@@ -887,7 +790,7 @@ def main():
 
     # Stop the DAB server
     d.gauge_update(66, 'Shutting down DAB server...', update_text=True)
-    dab.stop()
+    dabsrv.stop()
 
     d.gauge_update(100, 'Goodbye!', update_text=True)
     time.sleep(0.5)

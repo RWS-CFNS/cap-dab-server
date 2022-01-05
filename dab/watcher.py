@@ -41,6 +41,7 @@ class DABWatcher(threading.Thread):
         self.q = q
         self.zmqsock = zmqsock
         self.streams = streams
+        self.config = config
         self.muxcfg = muxcfg.cfg
 
         self.alarm = config['warning'].getboolean('alarm')
@@ -129,7 +130,7 @@ class DABWatcher(threading.Thread):
 
                         if self.replace:
                             try:
-                                utils.replace_streams(self.zmqsock, self.muxcfg, self.streams, False)
+                                utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, False)
                                 logger.info('Original streams restored successfully')
                             except Exception as e:
                                 logger.error(f'Failed to restore original stream: {e}')
@@ -189,7 +190,7 @@ class DABWatcher(threading.Thread):
                 # Perform stream replacement if enabled in settings
                 if self.replace:
                     try:
-                        utils.replace_streams(self.zmqsock, self.muxcfg, self.streams, True)
+                        utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, True)
                         logger.info('Replaced streams with alarm stream successfully')
                     except Exception as e:
                         logger.error(f'Failed to perform stream replacement: {e}')

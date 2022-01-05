@@ -100,7 +100,7 @@ def mux_send(sock, msgs):
 
     return res
 
-def replace_streams(zmqsock, muxcfg, streams, alarm_on):
+def replace_streams(zmqsock, config, muxcfg, streams, alarm_on):
     for sname, service in muxcfg.services:
         # Check if this service supports alarm announcements
         # TODO also support Warning announcement
@@ -111,9 +111,9 @@ def replace_streams(zmqsock, muxcfg, streams, alarm_on):
         if alarm_on:
             # Replace the service Label and PTY to the one configured for Alarm announcements
             # FIXME create a setting for this, don't hardcode!!!
-            label = 'NL-Alert'
-            shortlabel = label
-            pty = '3'
+            label = config['warning']['label']
+            shortlabel = config['warning']['shortlabel']
+            pty = config['warning']['pty']
         else:
             # Restore the original service labels
             # FIXME generate shortlabel if there's no shortlabel

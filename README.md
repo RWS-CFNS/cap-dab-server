@@ -59,10 +59,10 @@ TODO
 - [x] TTS
 - [x] Implement ability to cancel announcements
 - [ ] Change Alarm channel/stream replacement DLS text (and change back after cancel)
-- [ ] Configurable label, pty and such for stream replacement/alarm channel
+- [x] Configurable label, pty and such for stream replacement/alarm channel
 - [x] Manual announcement triggering
 - [ ] GUI config - Ensemble announcement
-- [ ] GUI config - Service PTY and Announcement
+- [x] GUI config - Service PTY and Announcement
 - [ ] GUI config - Subchannels
 - [ ] GUI config - Stream
 - [ ] GUI config - DAB modulator
