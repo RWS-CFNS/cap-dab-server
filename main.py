@@ -127,7 +127,7 @@ ANNOUNCEMENT_TYPES = {
     'Alarm':        'Alarm announcement (Urgent)',
     'Traffic':      'Road Traffic flash',
     'Travel':       'Public Transport flash',
-    'Warning':      'Warning/Service flash (Less urgent compared to Alarm)',
+    'Warning':      'Warning/Service flash (Less urgent than Alarm)',
     'News':         'News flash',
     'Weather':      'Weather bulletin',
     'Event':        'Event announcement',
@@ -413,8 +413,15 @@ def dab_config():
             localtitle = f'{service} - Services - {TITLE}'
 
             def announcements(service):
-                # TODO implement
-                _error('Not Yet Implemented')
+                dab.config.cfg.services[service].announcements
+
+                menu = [(k, v, bool(dab.config.cfg.services[service].announcements.getboolean(k))) for k, v in ANNOUNCEMENT_TYPES.items()]
+
+                code, tags = d.checklist('', title=f'Announcements - {localtitle}', choices=menu)
+
+                if code == Dialog.OK:
+                    for k in ANNOUNCEMENT_TYPES.keys():
+                        dab.config.cfg.services[service].announcements[k] = str(bool(k in tags)).lower()
 
             # TODO check if required fields have been entered (label and ID)
 
@@ -539,7 +546,7 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
         _error('Not Yet Implemented')
 
     def warning_config():
-        localtitle = 'Warning settings - {TITLE}'
+        localtitle = f'Warning settings - {TITLE}'
         def cap_announcement():
             _error('Not Yet Implemented')
 

@@ -75,6 +75,11 @@ class BoostInfoTree(object):
         return self._prettyprint()
 
     def getboolean(self, key):
+        try:
+            assert self.subTrees[key]
+        except (KeyError, AssertionError):
+            self.__setitem__(key, None)
+
         value = self.subTrees[key].value
 
         if value is not None and len(value) > 0:
