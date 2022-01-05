@@ -94,7 +94,7 @@ class CAPParser():
         scope.text = 'Public'
 
         references = Xml.SubElement(root, 'references')
-        references.text = f'{ref_identifier},{ref_sender},{ref_sent}'
+        references.text = f'{ref_sender},{ref_identifier},{ref_sent}'
 
         return Xml.tostring(root, encoding='unicode', xml_declaration=True)
 
@@ -212,8 +212,8 @@ class CAPParser():
         for msg in refs.split(' '):
             ref = msg.split(',')
             msgs.append({
-                        'identifier': ref[1],
                         'sender': ref[0],
+                        'identifier': ref[1],
                         'sent': ref[2]
                         })
 
