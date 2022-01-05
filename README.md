@@ -73,6 +73,7 @@ TODO
 - [x] Use ZeroMQ ipc instead of telnet for communication with odr-dabmux
 - [ ] Allow user to select which announcement to use for CAP messages
 - [ ] Implement more of the CAP spec (message updates, ...)
+- [ ] Split admin interface from server component
 
 # License
 This project is licensed under the GNU General Public License v3.0. See
