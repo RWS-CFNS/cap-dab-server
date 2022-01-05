@@ -78,9 +78,13 @@ class CAPHTTP(threading.Thread):
 
 class CAPServer():
     def _index(self):
-        content_type = flask.request.content_type
+        # Obtain the Client's IP
+        route = flask.request.access_route
+        client_addr = next((addr for addr in reversed(route) if addr != '127.0.0.1'), flask.request.remote_addr)
 
         # Check if Content-Type header is set to an XML MIME type
+        content_type = flask.request.content_type
+
         if not content_type.startswith('application/xml') and not content_type.startswith('text/xml'):
             if utils.logger_strict(logger, f'{"FAIL" if strict else "WARN"}: invalid Content-Type: {content_type}'):
                 return flask.Response(status=415)
@@ -98,8 +102,10 @@ class CAPServer():
             return flask.Response(status=400)
 
         if cp.msg_type == CAPParser.TYPE_LINK_TEST:
+            logger.info(f'{client_addr}: Link Test OK')
             pass
         elif cp.msg_type == CAPParser.TYPE_ALERT:
+            logger.info(f'{client_addr}: Alert OK')
             try:
                 self._q.put({
                             'msg_type': cp.msg_type,
@@ -114,6 +120,8 @@ class CAPServer():
             except queue.Full:
                 logger.error('Queue is full, perhaps increase queuelimit?')
         elif cp.msg_type == CAPParser.TYPE_CANCEL:
+            logger.info(f'{client_addr}: Alert Cancel OK')
+
             try:
                 self._q.put({
                             'msg_type': cp.msg_type,
