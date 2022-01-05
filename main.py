@@ -559,21 +559,21 @@ def announce():
         # Load in announcements from multiplexer config
         menu = [('CAP', 'Manually send a CAP alarm announcement')]
 
-        for key, value in dab.config.cfg.ensemble.announcements:
-            cluster = str(value.cluster)
+        for name, announcement in dab.config.cfg.ensemble.announcements:
+            cluster = str(announcement.cluster)
 
-            announcements = ''
-            for ann, state in value.flags:
-                if value.flags.getboolean(state):
-                    announcements += f'{ann}, '
-            announcements = announcements[:-2]
+            supported = ''
+            for atype, state in announcement.flags:
+                if announcement.flags.getboolean(atype):
+                    supported += f'{atype}, '
+            supported = supported[:-2]
 
-            subch = str(value.subchannel)
+            subch = str(announcement.subchannel)
 
             # query the state of the announcement
             state = bool(int(utils.mux_send(dab.zmqsock, ('get', 'alarm', 'active'))))
 
-            menu.append((f'{"* " if state else "  "}{key}', f'Cluster {cluster}: {announcements} (Switch to "{subch}")'))
+            menu.append((f'{"* " if state else "  "}{name}', f'Cluster {cluster}: {supported} (Switch to "{subch}")'))
 
         code, tag = d.menu('''
 Please select the announcement to signal.
@@ -585,7 +585,7 @@ Announcements prefixed with a * are currently active.
             break
         elif tag == 'CAP':
             # TODO let user fill out form with description, message, etc.
-            #      signal announcement and perform channel replacement if configured
+            #      signal announcement and perform stream replacement if configured
             _error('Not Yet Implemented')
             pass
         elif code == Dialog.OK:

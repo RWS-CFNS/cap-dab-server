@@ -19,6 +19,7 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
+import copy     # For creating a copy on the Stream configuration
 import os       # For file I/O
 import stat     # For checking if output is a FIFO
 import tempfile # For creating a temporary FIFO
@@ -98,3 +99,64 @@ def mux_send(sock, msgs):
         res += part.decode()
 
     return res
+
+def replace_streams(zmqsock, muxcfg, streams, alarm_on):
+    for sname, service in muxcfg.services:
+        # Check if this service supports alarm announcements
+        alarm = service.announcements.getboolean('Alarm')
+        if alarm is None or alarm == False:
+            continue
+
+        if alarm_on:
+            # Replace the service Label and PTY to the one configured for Alarm announcements
+            # FIXME create a setting for this, don't hardcode!!!
+            label = 'NL-Alert'
+            shortlabel = label
+            pty = '3'
+        else:
+            # Restore the original service labels
+            # FIXME generate shortlabel if there's no shortlabel
+            label = str(service['label'])
+            shortlabel = str(service['shortlabel'])
+            pty = str(service['pty'])
+
+        out = mux_send(zmqsock, ('set', sname, 'label', f'{label},{shortlabel}'))
+        out = mux_send(zmqsock, ('set', sname, 'pty', pty))
+
+        # Get the streams corresponding to this service
+        for _, component in muxcfg.components:
+            if str(component.service) != sname:
+                continue
+
+            # Skip non-audio components
+            if int(str(component.type)) not in (0, 1, 2):
+                continue
+
+            # Check if this name exists in the config too
+            subchannel = str(component.subchannel)
+            found = False
+
+            # TODO can this be done prettier?
+            for s, t, c, o in streams.streams:
+                if s == subchannel:
+                    found = True
+
+                    # TODO change DLS
+                    if alarm_on:
+                        # Create a copy of the stream's config
+                        cfg = copy.deepcopy(c)
+
+                        cfg['input_type'] = 'file'
+                        cfg['input'] = '../sub-alarm/tts.wav'
+
+                        cfg['dls_enable'] = 'yes'
+                        cfg['mot_enable'] = 'no'
+
+                        # Perform stream replacement on the corresponding subchannel/stream
+                        streams.setcfg(s, cfg)
+                    else:
+                        # Restore the old stream
+                        streams.setcfg(s)
+
+            if found == False:
+                raise Exception(f'Subchannel "{subchannel}" was not found in streams.ini!')

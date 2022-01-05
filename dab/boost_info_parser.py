@@ -76,8 +76,10 @@ class BoostInfoTree(object):
         return self._prettyprint()
 
     def getboolean(self, key):
-        if self.value is not None and len(self.value) > 0:
-            return True if self.value in ('True', 'true', '1') else False
+        value = self.subTrees[key].value
+
+        if value is not None and len(value) > 0:
+            return True if value in ('True', 'true', '1') else False
         else:
             return None
 

@@ -20,7 +20,6 @@
 #
 
 import configparser                 # Python INI file parser
-import copy                         # For creating a copy on the Stream configuration
 import datetime                     # To get the current date and time
 import logging                      # Logging facilities
 import os                           # For file I/O
@@ -124,27 +123,16 @@ class DABWatcher(threading.Thread):
                 if num == 0:
                     # Stop the alarm announcement and switch services back to their original streams
                     for s, t, c, o in self.streams.streams:
-                        # TODO change back dls and label
                         if self.alarm:
                             out = utils.mux_send(self.zmqsock, ('set', 'alarm', 'active', '0'))
-                            logger.info(f'Deactivating alarm announcement, res: {out}')
+                            logger.info(f'Alarm announcement deactivated, res: {out}')
 
                         if self.replace:
-                            # Restore the old stream
-                            self.streams.setcfg(s)
-
-                            service = 'srv-audio' # FIXME don't hardcode, do for each
-
-                            # Restore the original service labels
-                            # FIXME generate shortlabel if there's no shortlabel
-                            label = str(self.muxcfg.services[service]['label'])
-                            shortlabel = str(self.muxcfg.services[service]['shortlabel'])
-                            pty = str(self.muxcfg.services[service]['pty'])
-
-                            out = utils.mux_send(self.zmqsock, ('set', service, 'label', f'{label},{shortlabel}'))
-                            logger.info(f'Restoring original Service Label on service {service}, res: {out}')
-                            out = utils.mux_send(self.zmqsock, ('set', service, 'pty', pty))
-                            logger.info(f'Restoring original PTY on service {service}, res: {out}')
+                            try:
+                                utils.replace_streams(self.zmqsock, self.muxcfg, self.streams, False)
+                                logger.info('Original streams restored successfully')
+                            except Exception as e:
+                                logger.error(f'Failed to restore original stream: {e}')
 
                     self.q.task_done()
                     continue
@@ -198,42 +186,13 @@ class DABWatcher(threading.Thread):
                     out = utils.mux_send(self.zmqsock, ('set', 'alarm', 'active', '1'))
                     logger.info(f'Activating alarm announcement, res: {out}')
 
-                # Perform channel replacement if enabled in settings
+                # Perform stream replacement if enabled in settings
                 if self.replace:
-                    # Skip services that don't have the Alarm announcement enabled # TODO mention this in the GUI
-
-                    # Modify the stream config in memory so all streams correspond to the alarm stream
-                    for s, t, c, o in self.streams.streams:
-                        service = 'srv-audio' # FIXME don't hardcode, do for each
-
-                        # Restore the original service labels
-                        label = 'NL-Alert'
-                        shortlabel = label
-                        pty = '3'
-                        #label = str(self.muxcfg.services['srv-alarm']['label'])
-                        #shortlabel = str(self.muxcfg.services['srv-alarm']['shortlabel'])
-                        #pty = str(self.muxcfg.services['srv-alarm']['pty'])
-
-                        # FIXME TODO find services via component config!
-                        # Replace all service labels, pty with the ones from srv-alarm
-                        out = utils.mux_send(self.zmqsock, ('set', service, 'label', f'{label},{shortlabel}'))
-                        logger.info(f'setting Alarm Service Label on service {service}, res: {out}')
-                        out = utils.mux_send(self.zmqsock, ('set', service, 'pty', pty))
-                        logger.info(f'Setting INFO PTY on service {service}, res: {out}')
-
-                        # Create a new config copy
-                        cfg = copy.deepcopy(c)
-
-                        cfg['input_type'] = 'file'
-                        cfg['input'] = '../sub-alarm/tts.wav'
-
-                        cfg['dls_enable'] = 'yes'
-                        cfg['mot_enable'] = 'no'
-
-                        # TODO change DLS
-
-                        # Then, restart all modified streams with the emergency stream
-                        self.streams.setcfg(s, cfg)
+                    try:
+                        utils.replace_streams(self.zmqsock, self.muxcfg, self.streams, True)
+                        logger.info('Replaced streams with alarm stream successfully')
+                    except Exception as e:
+                        logger.error(f'Failed to perform stream replacement: {e}')
 
                 self.q.task_done()
             except queue.Empty:

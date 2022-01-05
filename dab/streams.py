@@ -224,7 +224,7 @@ class DABStreams():
 #
             #  return None
 
-    # Change the configuration for a stream, used for channel replacement mainly
+    # Change the configuration for a stream, used for stream replacement mainly
     def setcfg(self, stream, newcfg=None):
         i = 0
         for s, t, c, o in self.streams:
