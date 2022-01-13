@@ -66,12 +66,13 @@ TODO
 - [ ] GUI config - Subchannels
 - [ ] GUI config - Stream
 - [ ] GUI config - DAB modulator
+- [ ] GUI config - Packet address
 - [x] Settings - CAP identity
 - [ ] Logging - Add stream logs to GUI
 - [x] Option to use ODR-DabMod config file instead of fifo output
 - [ ] Option to restart threads that have quit
 - [x] Use ZeroMQ ipc instead of telnet for communication with odr-dabmux
-- [ ] Allow user to select which announcement to use for CAP messages
+- [x] Allow user to select which announcement to use for CAP messages
 - [ ] Implement more of the CAP spec (message updates, ...)
 - [ ] Split admin interface from server component
 
@@ -82,5 +83,10 @@ This project is licensed under the GNU General Public License v3.0. See
 # Credits
 Credits to [OpenDigitalRadio](http://www.opendigitalradio.org/) for the
 excellent open-source ODR-mmbTools DAB/DAB+ software tools.
+
+Credits to Felix Morgner and Tobias Stauber for their work on the
+[data-over-dab-example](https://github.com/Opendigitalradio/data-over-dab-example)
+code. I have derived from their work and (mostly) rewritten it in Python to
+integrate into this project.
 
 Credit to Adeola Bannis of the University of California for [BoostInfoParser](https://gist.github.com/thecodemaiden/dc4e4e4a54eaa5f0be84).

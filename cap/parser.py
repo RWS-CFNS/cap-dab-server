@@ -212,9 +212,9 @@ class CAPParser():
         for msg in refs.split(' '):
             ref = msg.split(',')
             msgs.append({
-                        'sender': ref[0],
-                        'identifier': ref[1],
-                        'sent': ref[2]
+                         'sender': ref[0],
+                         'identifier': ref[1],
+                         'sent': ref[2]
                         })
 
         return msgs

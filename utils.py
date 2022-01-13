@@ -19,7 +19,7 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-import copy     # For creating a copy on the Stream configuration
+import copy     # For creating a copy on the stream configuration
 import os       # For file I/O
 import stat     # For checking if output is a FIFO
 import tempfile # For creating a temporary FIFO

@@ -19,142 +19,15 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-import configparser             # Python INI file parser
-import logging                  # Logging facilities
-import os                       # For checking if files exist
-import subprocess as subproc    # Support for starting subprocesses
-import threading                # Threading support (for running streams in the background)
-import time                     # For sleep support
+import configparser                     # Python INI file parser
+import logging                          # Logging facilities
+import os                               # For creating directories
+import time                             # For sleep support
 import utils
+from dab.audio import DABAudioStream
+from dab.data import DABDataStream
 
 logger = logging.getLogger('server.dab')
-
-# This class represents every stream as a thread, defined in streams.ini
-class DABStream(threading.Thread):
-    def __init__(self, config, name, index, streamcfg, output):
-        threading.Thread.__init__(self)
-
-        self.name = name
-        self.streamcfg = streamcfg
-        self.outsock = output
-
-        self.streamdir = f'{config["general"]["logdir"]}/streams/{self.name}'
-        self.binpath = config['dab']['odrbin_path']
-
-        self.audio = None
-        self.pad = None
-
-        # Create a directory structure for the stream to save logs to and load DLS and MOT information from
-        os.makedirs(self.streamdir, exist_ok=True)
-        os.makedirs(f'{self.streamdir}/logs', exist_ok=True)
-        if self.streamcfg.getboolean('dls_enable'):
-            open(f'{self.streamdir}/dls.txt', 'a').close()
-        if self.streamcfg.getboolean('mot_enable'):
-            os.makedirs(f'{self.streamdir}/mot', exist_ok=True)
-
-        self._running = True
-
-    def run(self):
-        # If DLS and MOT are disabled, we won't need to start odr-padenc
-        pad_enable = self.streamcfg.getboolean('dls_enable') and self.streamcfg.getboolean('mot_enable')
-
-        # Save our logs (FIXME rotate logs)
-        audiolog = open(f'{self.streamdir}/logs/audioenc.log', 'ab')
-        if pad_enable:
-            padlog = open(f'{self.streamdir}/logs/padenc.log', 'ab')
-
-        failcounter = 0
-        while self._running and failcounter < 4:
-            # Start up odr-audioenc DAB/DAB+ audio encoder
-            audioenc_cmdline = [
-                                f'{self.binpath}/odr-audioenc',
-                                f'--bitrate={self.streamcfg["bitrate"]}',
-                                 '-D',
-                                f'--output=ipc://{self.outsock}',
-                                f'--pad-socket={self.name}',
-                                f'--pad={self.streamcfg["pad_length"]}'
-                            ]
-
-            # Set the DAB type
-            if self.streamcfg['output_type'] == 'dab':
-                audioenc_cmdline.append('--dab')
-
-            # Add the input to cmdline
-            if self.streamcfg['input_type'] == 'gst':
-                audioenc_cmdline.append(f'--gst-uri={self.streamcfg["input"]}')
-            elif self.streamcfg['input_type'] == 'fifo':
-                audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
-                audioenc_cmdline.append('--format=raw')
-                audioenc_cmdline.append('--fifo-silence')
-            elif self.streamcfg['input_type'] == 'file':
-                audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
-                audioenc_cmdline.append('--format=wav')
-
-            self.audio = subproc.Popen(audioenc_cmdline, stdout=audiolog, stderr=audiolog)
-
-            # Start up odr-padenc PAD encoder
-            if pad_enable:
-                padenc_cmdline = [
-                                f'{self.binpath}/odr-padenc',
-                                 '--charset=0',
-                                f'--output={self.name}'
-                                ]
-
-                # Add DLS and MOT if enabled
-                if self.streamcfg.getboolean('dls_enable'):
-                    padenc_cmdline.append(f'--dls={self.streamdir}/dls.txt')
-                if self.streamcfg.getboolean('mot_enable'):
-                    padenc_cmdline.append(f'--dir={self.streamdir}/mot')
-                    padenc_cmdline.append(f'--sleep={self.streamcfg["mot_timeout"]}')
-
-                self.pad = subproc.Popen(padenc_cmdline, stdout=padlog, stderr=padlog)
-
-            # Send odr-dabmux's data to odr-dabmod. This operation blocks until the process in killed
-            self.audio.communicate()[0]
-
-            # Quit odr-padenc if odr-audioenc exits for some reason
-            self.audio.terminate()
-            if pad_enable:
-                self.pad.terminate()
-
-                # Wait max. 5 seconds for odr-padenc to terminate
-                try:
-                    self.pad.wait(timeout=5)
-                except subproc.TimeoutExpired as e:
-                    logger.error(f'Unable to terminate odr-padenc for DAB stream "{self.name}". Stopping stream. {e}')
-                    break
-
-            # Wait a second or 2 to prevent going into an restarting loop and overloading the system
-            if self._running:
-                time.sleep(2)
-
-            # Maintain a failcounter to automatically exit the loop if we are unable to bring the stream up
-            failcounter += 1
-
-        if self._running:
-            logger.error(f'Terminating DAB stream "{self.name}". odr-audioenc failed to start {failcounter} times')
-
-        audiolog.close()
-        if pad_enable:
-            padlog.close()
-
-    # TODO log termination
-    def join(self):
-        if not self.is_alive():
-            return
-
-        self._running = False
-
-        if self.audio is not None:
-            self.audio.terminate()
-            try:
-                self.audio.wait(timeout=5)
-            except subproc.TimeoutExpired as e:
-                logger.error(f'Unable to terminate odr-audioenc for DAB stream "{self.name}". {e}')
-
-        # TODO consider deleting the stream directory structure on exiting the thread (or at least add an option in settings)
-
-        super().join()
 
 # Class that manages individual DAB stream threads
 class DABStreams():
@@ -164,25 +37,35 @@ class DABStreams():
         self._streamscfg = None
         self.streams = []
 
-    def _start_stream(self, stream, index, cfg, out):
-        logger.info(f'Starting up DAB stream {stream}...')
+    def _start_stream(self, stream, index, streamcfg):
+        # Create a temporary FIFO for output
+        out = utils.create_fifo()
 
         try:
-            thread = DABStream(self._srvcfg, stream, index, cfg, out)
+            if streamcfg['output_type'] == 'data':
+                logger.info(f'Starting up DAB data stream {stream}...')
+                thread = DABDataStream(self._srvcfg, stream, index, streamcfg, out)
+            else:
+                logger.info(f'Starting up DAB audio stream {stream}...')
+
+                thread = DABAudioStream(self._srvcfg, stream, index, streamcfg, out)
+
             thread.start()
 
-            self.streams.insert(index, (stream, thread, cfg, out))
+            self.streams.insert(index, (stream, thread, streamcfg, out))
+
+            return True
         except KeyError as e:
             logger.error(f'Unable to start DAB stream "{stream}", check configuration. {e}')
-            return False
         except OSError as e:
             logger.error(f'Unable to start DAB stream "{stream}", invalid streams config. {e}')
-            return False
         except Exception as e:
             logger.error(f'Unable to start DAB stream "{stream}". {e}')
-            return False
 
-        return True
+        if out is not None:
+            utils.remove_fifo(out)
+
+        return False
 
     def start(self):
         # Load streams configuration into memory
@@ -199,36 +82,37 @@ class DABStreams():
         i = 0
         ret = True
         for stream in self._streamscfg.sections():
-            # Create a temporary FIFO for output
-            out = utils.create_fifo()
-
-            if self._start_stream(stream, i, self._streamscfg[stream], out):
+            if self._start_stream(stream, i, self._streamscfg[stream]):
                 i += 1
             else:
-                utils.remove_fifo(out)
                 ret = False
 
         return ret
 
     # Get the specified stream's configuration
-    #  def getcfg(self, stream, default=False):
-        #  if default:
-            #  try:
-                #  return self._streamscfg[stream]
-            #  except KeyError:
-                #  return None
-        #  else:
-            #  for s, t, c, o in self.streams:
-                #  if s == stream:
-                    #  return c
-#
-            #  return None
+    def getcfg(self, stream, default=False):
+        if default:
+            try:
+                return self._streamscfg[stream]
+            except KeyError:
+                return None
+        else:
+            for s, t, c, o in self.streams:
+                if s == stream:
+                    return c
+
+            return None
 
     # Change the configuration for a stream, used for stream replacement mainly
     def setcfg(self, stream, newcfg=None):
         i = 0
         for s, t, c, o in self.streams:
+            # Get the current stream
             if s == stream:
+                # Check if this stream is an audio stream
+                if c['output_type'] == 'data':
+                    return
+
                 # Restore to the original stream
                 if newcfg is None:
                     newcfg = self._streamscfg[stream]
@@ -241,7 +125,7 @@ class DABStreams():
                 time.sleep(4)
 
                 # And fire up the new one
-                return self._start_stream(stream, i, newcfg, o)
+                return self._start_stream(stream, i, newcfg)
 
             i += 1
 
@@ -251,7 +135,8 @@ class DABStreams():
             return
 
         for s, t, c, o in self.streams:
-            utils.remove_fifo(o)
+            if o is not None:
+                utils.remove_fifo(o)
             t.join()
 
         self.streams = []

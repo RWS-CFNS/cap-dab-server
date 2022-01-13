@@ -19,6 +19,8 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
+# TODO clean-up this code, it is quite messy right now
+
 import configparser                 # Python INI file parser
 import datetime                     # To get the current date and time
 import logging                      # Logging facilities
@@ -184,7 +186,7 @@ class DABWatcher(threading.Thread):
                 # Signal the alarm announcement if enabled in settings
                 if self.alarm:
                     # TODO start later if effective is later than current time
-                    out = utils.mux_send(self.zmqsock, ('set', 'alarm', 'active', '1'))
+                    out = utils.mux_send(self.zmqsock, ('set', self.config['warning']['alarm'], 'active', '1'))
                     logger.info(f'Activating alarm announcement, res: {out}')
 
                 # Perform stream replacement if enabled in settings

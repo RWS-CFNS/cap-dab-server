@@ -48,9 +48,8 @@ class ODRMuxConfig():
             self.cfg['subchannels']
             del self.cfg['subchannels']
             self.cfg['components']
-            del self.cfg['components']
 
-            # Load in configuration from streams.ini
+            # Generate subchannels from streams.ini
             i = 0
             for s, t, c, o in self.streams.streams:
                 self.cfg.subchannels[s]['id'] = str(i)
@@ -60,26 +59,53 @@ class ODRMuxConfig():
                     self.cfg.subchannels[s]['type'] = 'dabplus'
                 elif output_type == 'dab':
                     self.cfg.subchannels[s]['type'] = 'audio'
+                elif output_type == 'data':
+                    self.cfg.subchannels[s]['type'] = 'packet'
                 else:
                     logger.error(f'Invalid output_type: {output_type}')
+
                 self.cfg.subchannels[s]['bitrate'] = c['bitrate']
                 self.cfg.subchannels[s]['protection-profile'] = c['protection_profile']
                 self.cfg.subchannels[s]['protection'] = c['protection']
 
-                comp_name = f'comp-{s}'
-                self.cfg.components[comp_name]['type'] = '2' # Type 2 = multi-channel audio stream
-                self.cfg.components[comp_name]['service'] = 'srv-audio' # FIXME FIXME FIXME configure this in the GUI!!!
-                self.cfg.components[comp_name]['subchannel'] = s
-                if c.getboolean('mot_enable') == True:
-                    self.cfg.components[comp_name]['user-applications']['userapp'] = 'slideshow'
-
                 # Set our temporary output FIFO for IPC between odr-audioenc and odr-dabmux
-                self.cfg.subchannels[s]['inputproto'] = 'zmq'
-                self.cfg.subchannels[s]['inputuri'] = f'ipc://{o}'
-                self.cfg.subchannels[s]['zmq-buffer'] = '40'
-                self.cfg.subchannels[s]['zmq-prebuffering'] = '20'
+                input_type = c['input_type']
+                if input_type == 'gst':
+                    self.cfg.subchannels[s]['inputproto'] = 'zmq'
+                    self.cfg.subchannels[s]['inputuri'] = f'ipc://{o}'
+                    self.cfg.subchannels[s]['zmq-buffer'] = '40'
+                    self.cfg.subchannels[s]['zmq-prebuffering'] = '20'
+                elif input_type == 'file':
+                    self.cfg.subchannels[s]['inputproto'] = 'file'
+                    self.cfg.subchannels[s]['inputuri'] = c['input']
+                elif input_type == 'fifo':
+                    self.cfg.subchannels[s]['inputproto'] = 'file'
+                    self.cfg.subchannels[s]['inputuri'] = c['input']
+                    self.cfg.subchannels[s]['nonblock'] = 'true'
 
                 i += 1
+
+            # Generate components
+            for name, component in self.cfg.components:
+                stream_cfg = self.streams.getcfg(str(component['subchannel']))
+
+                if stream_cfg is None:
+                    continue
+
+                output_type = stream_cfg['output_type']
+                if output_type == 'dabplus':
+                    component['type'] = '2'     # multi-channel audio stream
+                elif output_type == 'dab':
+                    component['type'] = '2'     # multi-channel audio stream
+                elif output_type == 'data':
+                    component['type'] = '59'    # IP data stream
+                else:
+                    logger.error(f'Invalid output_type: {output_type}')
+
+                #self.cfg.components[comp_name]['service'] = 'srv-audio' # FIXME FIXME FIXME configure this in the GUI!!!
+                #self.cfg.components[comp_name]['subchannel'] = s
+                if stream_cfg.getboolean('mot_enable') == True:
+                    component['user-applications']['userapp'] = 'slideshow'
 
             return True
 

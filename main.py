@@ -31,6 +31,7 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 assert sys.version_info >= (3, 7)
 
 import configparser                 # Python INI file parser
+import copy                         # For creating a copy on the streams configuration
 import getpass                      # For getting the current user
 import logging                      # Logging facilities
 import logging.handlers             # Logging handlers
@@ -89,6 +90,7 @@ else:
     config['warning'] = {
                          'alarm': 'yes',
                          'replace': 'yes',
+                         'announcement': 'alarm',
                          'label': 'Alert',
                          'shortlabel': 'Alert',
                          'pty': '3'
@@ -284,7 +286,7 @@ def dab_config():
             elif tag == 'Announcements':
                 announcements()
 
-    def services():
+    def services(streamscfg):
         def modify(service):
             localtitle = f'{service} - Services - {TITLE}'
 
@@ -299,6 +301,20 @@ def dab_config():
                     for k in dab.types.ANNOUNCEMENT_TYPES.keys():
                         dabsrv.config.cfg.services[service].announcements[k] = str(bool(k in tags)).lower()
 
+            def stream(service):
+                menu = []
+
+                # Load streams into the menu list
+                i = 0
+                for stream in streamscfg.sections():
+                    menu.insert(i, (stream, streamscfg[stream]['output_type'].title() + ' stream', False))
+                    i += 1
+
+                code, tag = d.radiolist('', title=f'Stream - {localtitle}', choices=menu)
+
+                if code == Dialog.OK:
+                    dabsrv.config.cfg.components[f'comp-{service}'].subchannel = tag
+
             # TODO check if required fields have been entered (label and ID)
 
             while True:
@@ -309,6 +325,7 @@ def dab_config():
                                   ('Programme Type',  'Change the programme type (OPT)'),
                                   ('Announcements',   'Select which announcement to support on this service (OPT)'),
                                   ('Clusters',        'Change which announcement cluster this service belong to (OPT)'),
+                                  ('Stream',          'Configure which stream this service should broadcast (REQ)')
                                   ])
 
                 if code in (Dialog.CANCEL, Dialog.ESC):
@@ -316,7 +333,10 @@ def dab_config():
                 elif code == Dialog.EXTRA:
                     yncode = d.yesno(f'Are you sure you want to delete the service {service}?', width=60, height=6)
                     if yncode == Dialog.OK:
+                        # TODO check streamscfg for references in "services" tag and delete where needed
+
                         del dabsrv.config.cfg.services[service]
+                        del dabsrv.config.cfg.components[f'comp-{service}']
                         break
                 elif tag == 'ID':
                     sid = str(dabsrv.config.cfg.services[service]['id'])
@@ -382,11 +402,13 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 elif tag == 'Clusters':
                     # TODO implement
                     _error('Not Yet Implemented')
+                elif tag == 'Stream':
+                    stream(service)
 
         def add():
             while True:
                 code, name = d.inputbox('Please enter a new identifier/name for this service (no spaces)',
-                                          title=f'Add service - {TITLE}')
+                                        title=f'Add - Service - {TITLE}')
 
                 if code in (Dialog.CANCEL, Dialog.ESC):
                     break
@@ -396,6 +418,7 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                     _error('Identifier cannot contain spaces.')
                 else:
                     dabsrv.config.cfg.services[name]
+                    dabsrv.config.cfg.components[f'comp-{name}']['service'] = name
                     modify(name)
                     break
 
@@ -421,15 +444,141 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             elif code == Dialog.OK:
                 modify(tag)
 
-    def streams():
-        # TODO implement
-        _error('Not Yet Implemented')
+    def streams(streamscfg):
+        def modify(stream):
+            localtitle = f'{stream} - Streams - {TITLE}'
+
+            def stream_input():
+                output_type = streamscfg[stream]['output_type']
+                input_type = streamscfg[stream]['input_type']
+
+                # Configure the output type
+                menu_output = {
+                    'dab':      ['DAB',     'MP2 audio stream', False],
+                    'dabplus':  ['DAB+',    'AAC+ audio stream', False],
+                    'data':     ['Data',    'Arbitrary data stream', False]
+                }
+                if 'output_type' in streamscfg[stream]:
+                    menu_output[output_type][2] = True
+
+                code, tag = d.radiolist('', title=f'Stream Output - {localtitle}', choices=list(menu_output.values()))
+
+                # Configure the input type
+                menu_input = {
+                    'file': ['File',        'Specify a file path as input', False],
+                    'fifo': ['FIFO',        'Specify a named Unix PIPE (FIFO) as input', False]
+                }
+
+                # Data output can't use gstreamer as input, because odr-audioenc is not used
+                if output_type != 'data':
+                    menu_input['gst'] = ['GStreamer',   'Specify a GStreamer URI as input stream', False]
+
+                if 'input_type' in streamscfg[stream]:
+                    menu_input[input_type][2] = True
+
+                code, tag = d.radiolist('', title=f'Stream Input - {localtitle}', choices=list(menu_input.values()))
+
+                # Configure the input URI/Path
+                _error('Not Yet Implemented')
+                # TODO
+
+            def bitrate():
+                _error('Not Yet Implemented')
+
+            def protection():
+                _error('Not Yet Implemented')
+
+            def pad_components():
+                _error('Not Yet Implemented')
+
+            while True:
+                code, tag = d.menu('', title=localtitle, extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
+                                ('Stream Input',    'Configure the stream input'),
+                                ('Bitrate',         'Configure the bitrate to broadcast this stream at'),
+                                ('Protection',      'Configure the DAB protection level for the subchannel'),
+                                ('PAD Components',  'Configure PAD components for this subchannel')
+                                #('DLS',               ''),
+                                #('Slideshow',         ''),
+                                #('Slideshow Timeout', ''),
+                                #('Pad length',        '')
+                                ])
+
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    break
+                elif tag == 'Stream Input':
+                    stream_input()
+                elif tag == 'Bitrate':
+                    bitrate()
+                elif tag == 'Protection':
+                    protection()
+                elif tag == 'PAD Components':
+                    pad_components()
+
+        def add():
+            while True:
+                code, name = d.inputbox('Please enter a new identifier for this stream/subchannel (no spaces)',
+                                        title=f'Add - Stream - {TITLE}')
+
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    break
+                elif name == '':
+                    _error('Identifier cannot be empty.')
+                elif ' ' in name:
+                    _error('Identifier cannot contain spaces.')
+                else:
+                    streamscfg[name] = {}
+                    modify(name)
+                    break
+
+        while True:
+            menu = [('Add', 'Add a new stream')]
+
+            # Load streams into the menu list
+            i = 0
+            for stream in streamscfg.sections():
+                menu.insert(i, (stream, streamscfg[stream]['output_type'].title() + ' stream'))
+                i += 1
+
+            code, tag = d.menu('Please select a stream/subchannel', title=f'Streams - {TITLE}', cancel_label='Back', choices=menu)
+
+            if code in (Dialog.CANCEL, Dialog.ESC):
+                break
+            elif tag == 'Add':
+                add()
+            elif code == Dialog.OK:
+                modify(tag)
 
     def warning_config():
         localtitle = f'Warning settings - {TITLE}'
 
         def cap_announcement():
-            _error('Not Yet Implemented')
+            # Load in announcements from multiplexer config
+            menu = []
+
+            # Load in the currently configured announcement
+            curann = config['warning']['announcement']
+
+            for name, announcement in dabsrv.config.cfg.ensemble.announcements:
+                cluster = str(announcement.cluster)
+
+                supported = ''
+                for atype, state in announcement.flags:
+                    if announcement.flags.getboolean(atype):
+                        supported += f'{atype}, '
+                supported = supported[:-2]
+
+                subch = str(announcement.subchannel)
+
+                menu.append((f'{name}', f'Cluster {cluster}: {supported} (Switch to "{subch}")', bool(name == curann)))
+
+            code, tag = d.radiolist('', title=f'CAP announcement - {localtitle}', choices=menu)
+
+            if code == Dialog.OK:
+                config['warning']['announcement'] = tag
+
+                # FIXME save in the previous menu not here
+                with open(server_config, 'w') as config_file:
+                    config.write(config_file)
 
         def method():
             code, tags = d.checklist('Select the method by which you want the server to send DAB warning messages',
@@ -483,8 +632,21 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             elif tag == 'Warning method':
                 method()
 
-    # Before doing anything, create a copy of the current DAB config
+    # Load streams configuration into memory
+    cfgfile = config['dab']['stream_config']
+    os.makedirs(os.path.dirname(cfgfile), exist_ok=True)
+    streamscfg = configparser.ConfigParser()
+    if os.path.isfile(cfgfile):
+        streamscfg.read(cfgfile)
+    else:
+        logger.error(f'Unable to load DAB stream configuration: {cfgfile}')
+        return False
+
+    # Before doing anything, create a copy of the current config files
+    streamscfg_bak = copy.deepcopy(streamscfg)
     dabsrv.config.save()
+
+    # TODO also create a copy of streams.ini and server.ini
 
     while True:
         code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
@@ -495,6 +657,10 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                           ])
 
         if code == Dialog.EXTRA:
+            # Write streams.ini
+            with open(cfgfile, 'w') as config_file:
+                streamscfg.write(config_file)
+
             # Write config and restart the DAB server
             # FIXME saving while announcement is playing keeps stream, but doesn't keep alarm announcement
             d.gauge_start('', height=6, width=64, percent=0)
@@ -509,9 +675,9 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
         elif tag == 'Ensemble':
             ensemble()
         elif tag == 'Services':
-            services()
+            services(streamscfg)
         elif tag == 'Streams':
-            streams()
+            streams(streamscfg)
         elif tag == 'Warning settings':
             warning_config()
 
@@ -655,7 +821,6 @@ def announce():
         # TODO let user fill out form with description, message, etc.
         #      signal announcement and perform stream replacement if configured
         _error('Not Yet Implemented')
-        pass
 
     while True:
         # Load in announcements from multiplexer config
