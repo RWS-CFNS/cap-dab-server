@@ -150,8 +150,9 @@ class DABServer():
 
         # Load ODR-DabMux configuration into memory
         self.config = ODRMuxConfig(self._zmqsock_path, self._streams)
-        if not self.config.load(self._srvcfg['dab']['mux_config']):
-            logger.error(f'Unable to load DAB multiplexer configuration: {muxcfg}')
+        cfgfile = self._srvcfg['dab']['mux_config']
+        if not self.config.load(cfgfile):
+            logger.error(f'Unable to load DAB multiplexer configuration: {cfgfile}')
             return False
 
         # Start the DABServer thread

@@ -137,7 +137,7 @@ class DABAudioStream(threading.Thread):
             padlog.close()
 
     # TODO log termination
-    def join(self):
+    def join(self, timeout=5):
         if not self.is_alive():
             return
 
@@ -152,4 +152,4 @@ class DABAudioStream(threading.Thread):
 
         # TODO consider deleting the stream directory structure on exiting the thread (or at least add an option in settings)
 
-        super().join()
+        super().join(timeout)

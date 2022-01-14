@@ -31,7 +31,6 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 assert sys.version_info >= (3, 7)
 
 import configparser                 # Python INI file parser
-import copy                         # For creating a copy on the streams configuration
 import getpass                      # For getting the current user
 import logging                      # Logging facilities
 import logging.handlers             # Logging handlers
@@ -126,18 +125,30 @@ def cap_restart(start=0, target=100):
     if capsrv.restart():
         d.gauge_update(target, 'Successfully saved!', update_text=True)
     else:
-        d.gauge_update(int(target / 2), 'Failed to start CAP server, please refer to the server logs', update_text=True)
+        d.gauge_stop()
+        d.msgbox('Failed to start CAP server, please refer to the server logs', title='Error', width=60, height=8)
+        d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=target)
         time.sleep(4)
     time.sleep(0.5)
 
 def dab_restart(start=0, target=100):
-    d.gauge_update(start, 'Saving changes to DAB config, one moment please...', update_text=True)
+    # Restart DAB Streams
+    d.gauge_update(start, 'Saving changes to DAB stream config, one moment please...', update_text=True)
+
+    if not dabstreams.restart():
+        d.gauge_stop()
+        d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error', width=60, height=8)
+        d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=target)
+
+    # Restart DAB server
+    d.gauge_update(int((start + target) / 2), 'Saving changes to DAB server config, one moment please...', update_text=True)
     if dabsrv.restart():
         d.gauge_update(target, 'Successfully saved!', update_text=True)
+        time.sleep(0.5)
     else:
-        d.gauge_update(int(target / 2), 'Failed to start DAB server, please refer to the server logs', update_text=True)
-        time.sleep(4)
-    time.sleep(0.5)
+        d.gauge_stop()
+        d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error', width=60, height=8)
+        d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=target)
 
 def status():
     def state(b):
@@ -160,7 +171,7 @@ def status():
         ]
 
         # Insert the state of DAB Streams in separate rows (after 'DAB Streams')
-        for s in streams.status():
+        for s in dabstreams.status():
             states.insert(3, [f'  - {s[0]}', state(s[1])])
 
         # Format the states list into columns
@@ -286,14 +297,14 @@ def dab_config():
             elif tag == 'Announcements':
                 announcements()
 
-    def streams(streamscfg):
+    def streams():
         def modify(stream):
             localtitle = f'{stream} - Streams - {TITLE}'
 
             def stream_input():
-                input_type = streamscfg[stream]['input_type']
-                inputuri = streamscfg[stream]['input']
-                output_type = streamscfg[stream]['output_type']
+                input_type = dabstreams.config.cfg[stream]['input_type']
+                inputuri = dabstreams.config.cfg[stream]['input']
+                output_type = dabstreams.config.cfg[stream]['output_type']
 
                 # Configure the output type
                 menu_output = {
@@ -335,9 +346,9 @@ def dab_config():
                     return
                 inputuri = string
 
-                streamscfg[stream]['input_type'] = input_type
-                streamscfg[stream]['output_type'] = output_type
-                streamscfg[stream]['input'] = inputuri
+                dabstreams.config.cfg[stream]['input_type'] = input_type
+                dabstreams.config.cfg[stream]['output_type'] = output_type
+                dabstreams.config.cfg[stream]['input'] = inputuri
 
             def bitrate():
                 bitrates = [
@@ -368,13 +379,13 @@ def dab_config():
                            ]
 
                 # This is probably super inefficient but whatever
-                cur = streamscfg[stream]['bitrate']
+                cur = dabstreams.config.cfg[stream]['bitrate']
                 bitrates[next(bitrates.index(b) for b in bitrates if b[0] == cur)][2] = True
 
                 code, tag = d.radiolist('', title=f'Bitrate - {localtitle}', no_tags=True, choices=bitrates)
                 if code in (Dialog.CANCEL, Dialog.ESC):
                     return
-                streamscfg[stream]['bitrate'] = tag
+                dabstreams.config.cfg[stream]['bitrate'] = tag
 
             def protection():
                 _error('Not Yet Implemented. Default is: EEP_A 3. Configure in streams.ini')
@@ -396,6 +407,12 @@ def dab_config():
 
                 if code in (Dialog.CANCEL, Dialog.ESC):
                     break
+                elif code in Dialog.EXTRA:
+                    yncode = d.yesno(f'Are you sure you want to delete the stream {stream}?', width=60, height=6)
+                    if yncode == Dialog.OK:
+                        dabstreams.config.cfg.remove_section(stream)
+
+                        break
                 elif tag == 'Stream Input':
                     stream_input()
                 elif tag == 'Bitrate':
@@ -418,16 +435,16 @@ def dab_config():
                     _error('Identifier cannot contain spaces.')
                 else:
                     # Set some sane defaults
-                    streamscfg[name] = {}
-                    streamscfg[name]['input_type'] = 'gst'
-                    streamscfg[name]['input'] = 'http://127.0.0.1:1234'
-                    streamscfg[name]['output_type'] = 'dabplus'
-                    streamscfg[name]['bitrate'] = '88'
-                    streamscfg[name]['protection_profile'] = 'EEP_A'
-                    streamscfg[name]['protection'] = '3'
-                    streamscfg[name]['dls_enable'] = 'yes'
-                    streamscfg[name]['mot_enable'] = 'no'
-                    streamscfg[name]['pad_length'] = '58'
+                    dabstreams.config.cfg[name] = {}
+                    dabstreams.config.cfg[name]['input_type'] = 'gst'
+                    dabstreams.config.cfg[name]['input'] = 'http://127.0.0.1:1234'
+                    dabstreams.config.cfg[name]['output_type'] = 'dabplus'
+                    dabstreams.config.cfg[name]['bitrate'] = '88'
+                    dabstreams.config.cfg[name]['protection_profile'] = 'EEP_A'
+                    dabstreams.config.cfg[name]['protection'] = '3'
+                    dabstreams.config.cfg[name]['dls_enable'] = 'yes'
+                    dabstreams.config.cfg[name]['mot_enable'] = 'no'
+                    dabstreams.config.cfg[name]['pad_length'] = '58'
 
                     modify(name)
                     break
@@ -437,8 +454,8 @@ def dab_config():
 
             # Load streams into the menu list
             i = 0
-            for stream in streamscfg.sections():
-                menu.insert(i, (stream, streamscfg[stream]['output_type'].title() + ' stream'))
+            for stream in dabstreams.config.cfg.sections():
+                menu.insert(i, (stream, dabstreams.config.cfg[stream]['output_type'].title() + ' stream'))
                 i += 1
 
             code, tag = d.menu('Please select a stream/subchannel', title=f'Streams - {TITLE}', cancel_label='Back', choices=menu)
@@ -450,7 +467,7 @@ def dab_config():
             elif code == Dialog.OK:
                 modify(tag)
 
-    def services(streamscfg):
+    def services():
         def modify(service=''):
             localtitle = f'{service} - Services - {TITLE}'
 
@@ -499,8 +516,8 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
 
                 # Load streams into the menu list
                 i = 0
-                for stream in streamscfg.sections():
-                    menu.insert(i, (stream, streamscfg[stream]['output_type'].title() + ' stream', False))
+                for stream in dabstreams.config.cfg.sections():
+                    menu.insert(i, (stream, dabstreams.config.cfg[stream]['output_type'].title() + ' stream', False))
                     i += 1
 
                 # TODO select current stream
@@ -514,6 +531,8 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
 
             # Add a new service
             if service == '':
+                # TODO Fail if there's not streams configured
+
                 while True:
                     code, service = d.inputbox('Please enter a new identifier/name for this service (no spaces)',
                                             title=f'Add - Service - {TITLE}')
@@ -708,17 +727,9 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             elif tag == 'Warning method':
                 method()
 
-    # Load streams configuration into memory
-    cfgfile = config['dab']['stream_config']
-    os.makedirs(os.path.dirname(cfgfile), exist_ok=True)
-    streamscfg = configparser.ConfigParser()
-    if os.path.isfile(cfgfile):
-        streamscfg.read(cfgfile)
-
-        # Before doing anything, create a copy of the current config files
-        streamscfg_bak = copy.deepcopy(streamscfg)
+    # Before doing anything, create a copy of the current config files
+    dabstreams.config.save()
     dabsrv.config.save()
-
     # TODO also create a copy of server.ini
 
     while True:
@@ -730,14 +741,11 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                           ])
 
         if code == Dialog.EXTRA:
-            # Write streams.ini
-            with open(cfgfile, 'w') as config_file:
-                streamscfg.write(config_file)
-
             # Write config and restart the DAB server
             # FIXME saving while announcement is playing keeps stream, but doesn't keep alarm announcement
             d.gauge_start('', height=6, width=64, percent=0)
             dabsrv.config.write()
+            dabstreams.config.write()
             dab_restart()
             d.gauge_stop()
             break
@@ -748,9 +756,9 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
         elif tag == 'Ensemble':
             ensemble()
         elif tag == 'Streams':
-            streams(streamscfg)
+            streams()
         elif tag == 'Services':
-            services(streamscfg)
+            services()
         elif tag == 'Warning settings':
             warning_config()
 
@@ -767,7 +775,7 @@ def settings():
             ('Max log size',        3,  1, config['general']['max_log_size'], 3,  20, 8,  7,        0,
              'Maximum size per log file in Kb'),
 
-            ('CAP-DAB Queue limit', 4,  1, config['general']['queuelimit'],   4,  20, 8,  7,        0,
+            ('CAP-DAB queue limit', 4,  1, config['general']['queuelimit'],   4,  20, 8,  7,        0,
              'Maximum number of CAP messages that can be in the queue at one moment (requires manual restart)'),
 
             ('Streams config',      5,  1, config['dab']['stream_config'],    5,  20, 64, MAX_PATH, 0,
@@ -977,7 +985,7 @@ def main_menu():
 
 # Main setup
 def main():
-    global capsrv, dabsrv, streams
+    global capsrv, dabsrv, dabstreams
 
     d.set_background_title('CFNS - Rijkswaterstaat CIV, Delft © 2021 - 2022 | Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
@@ -996,15 +1004,15 @@ def main():
 
     # Start the DAB streams
     d.gauge_update(33, 'Starting DAB streams...', update_text=True)
-    streams = DABStreams(config)
-    if not streams.start():
+    dabstreams = DABStreams(config)
+    if not dabstreams.start():
         d.gauge_stop()
         d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error', width=60, height=8)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=33)
 
     # Start the DAB server
     d.gauge_update(66, 'Starting DAB server...', update_text=True)
-    dabsrv = DABServer(config, q, streams)
+    dabsrv = DABServer(config, q, dabstreams)
     if not dabsrv.start():
         d.gauge_stop()
         d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error', width=60, height=8)
@@ -1024,7 +1032,7 @@ def main():
     # Stop the DAB streams
     d.gauge_update(33, 'Shutting down DAB streams...', update_text=True)
     q.join()
-    streams.stop()
+    dabstreams.stop()
 
     # Stop the DAB server
     d.gauge_update(66, 'Shutting down DAB server...', update_text=True)

@@ -30,14 +30,11 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import logging          # Logging facilities
 import os               # For creating directories
 from struct import *    # For generating DAB MSC and Packet headers
-import threading        # Threading support (for running streams in the background)
+import multiprocessing  # Multiprocessing support (for running data streams in the background)
 import time             # For sleep support
 import utils
-
-logger = logging.getLogger('server.dab')
 
 # Calculate Packet/MSC data group CRC according to ETSI EN 300 401 V2.1.1 Sections 5.3.2.3 and 5.3.3.4
 def crc16(data):
@@ -175,13 +172,13 @@ class PacketBuilder():
         return self._build_packet(data, self.PACKET_LENGTH[i + 1], data_length)
 
 # This class represents an audio stream as a thread, defined in streams.ini
-class DABDataStream(threading.Thread):
+class DABDataStream(multiprocessing.Process):
     # FIFO read buffer size
     # TODO configure in GUI
     BUFFER_SIZE = 1024
 
     def __init__(self, config, name, index, streamcfg, output):
-        threading.Thread.__init__(self)
+        multiprocessing.Process.__init__(self)
 
         self.name = name
         self.input = streamcfg['input']
@@ -230,10 +227,10 @@ class DABDataStream(threading.Thread):
                         outfifo.write(packets)
                         outfifo.flush()
 
-            logger.warning(f'Failed to read from file {self.input} for data stream {self.name}. Retrying in 3 sec.')
-            time.sleep(3)
+            logger.warning(f'Failed to read from file {self.input} for data stream {self.name}. Retrying in 2 sec.')
+            time.sleep(2)
 
-    def join(self):
+    def join(self, timeout=3):
         if not self.is_alive():
             return
 
@@ -241,4 +238,4 @@ class DABDataStream(threading.Thread):
 
         # TODO consider deleting the stream directory structure on exiting the thread (or at least add an option in settings)
 
-        super().join()
+        super().join(timeout)

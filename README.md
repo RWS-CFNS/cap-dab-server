@@ -17,6 +17,7 @@ Requirements:
 - dialog (TUI)
 - espeak-ng (on Linux only)
 - ffmpeg (Convert mp3 TTS output to wav)
+- gstreamer (GStreamer input, optional)
 - odr-audioenc (DAB/DAB+ Encoder)
 - odr-padenc (DAB PAD Encoder)
 - odr-dabmux (DAB Multiplexer)
@@ -27,15 +28,18 @@ Requirements:
 - python-pythondialog (TUI)
 - python-pyzmq (IPC with ODR-mmbTools)
 
+Clone this repository and install above dependencies using the instructions
+below.
+
 ## Debian/Ubuntu
 ```
-$ sudo apt install dialog espeak-ng libespeak-ng-libespeak1 ffmpeg python3 python3-pip
+$ sudo apt install dialog espeak-ng gstreamer1.0-plugins-* libespeak-ng-libespeak1 ffmpeg python3 python3-pip
 $ pip3 install --user flask pyttsx3 pythondialog pyzmq
 ```
 
 ## macOS
 ```
-$ brew install dialog ffmpeg python
+$ brew install dialog ffmpeg gstreamer python
 $ pip3 install --user flask pyttsx3 pythondialog pyzmq
 ```
 
@@ -43,7 +47,60 @@ $ pip3 install --user flask pyttsx3 pythondialog pyzmq
 TODO
 
 # Configuration
-TODO
+Configuration is largely done using the Admin TUI (Terminal User Interface).
+
+NOTE Currently the Admin Interface is closely integrated with the CAP-DAB server.
+This means the cap-dab-server is not able to run in the background. Running the
+server is the background is still possible using terminal
+multiplexer such as GNU Screen and detaching from the session.
+
+A DAB in cap-dab-server ensemble consists of services and streams (officially
+called subchannels in DAB jargon). A DAB ensemble is broken down into one or
+more services. Services provide _one_ stream, which can be i.e. a HTTP audio
+stream, a named pipe with arbitrary data or single (looped) audio file.
+
+## Ensemble
+First, let us configure our ensemble. To do this, start cap-dab-server by
+running:
+```
+$ ./main.py
+```
+
+You'll be presented with several options, let's navigate to `DAB` > `Ensemble`
+first. Here, configure your Country and Ensemble Label.
+In section 'Alarm announcements', we'll configure which announcement will switch
+to which stream.
+
+## Services and Streams
+When cap-dab-server is first started, a simple ensemble is automatically
+configured, but services and stream have to be added manually before you can
+begin broadcasting.
+
+Let's add a stream first. From the main menu, go to `DAB` > `Streams` > `Add`.
+Enter a simple identifier for the stream such as `sub-audio`.\\
+Now, set the stream source by selecting `Stream Input`. Let's make this a DAB+
+stream. Navigate to `DAB+` with the arrow keys and press `Spacebar` to select.
+`Return` will move to the next screen.\\
+Select the input source type, choose GStreamer to use a HTTP webstream for
+example.\\
+In the next screen, enter the path (for File and FIFO) or the GSTURI (for
+GStreamer). In our example, we'll use a local VLC instance streaming a playlist
+on 127.0.0.1:1234. Enter `http://127.0.0.1:1234` and press `Return`.\\
+The remaining options can be modified later, but the defaults are relatively
+sane.
+\\
+\\
+Let's add a new service now. Navigate back to `DAB Configuration` and go to
+`Services` > `Add`. Enter a identifier such as `srv-audio`. For the service ID,
+use any value, such as `dab`. Now, select the stream we've just created.\\
+From here, you can optionally configure any other service parameters.
+
+When navigating back to `DAB Configuration`, make sure to press `Save` to save
+our configured changes and restart the DAB server.
+
+## Alarm announcements
+
+## CAP announcements
 
 # Warning method
 TODO

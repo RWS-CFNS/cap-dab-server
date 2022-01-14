@@ -19,13 +19,14 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-import configparser                     # Python INI file parser
-import logging                          # Logging facilities
-import os                               # For creating directories
-import time                             # For sleep support
+import logging                              # Logging facilities
+import multiprocessing                      # Multiprocessing support (for running data streams in the background)
+import os                                   # For creating directories
+import time                                 # For sleep support
+from dab.audio import DABAudioStream        # DAB audio (DAB/DAB+) stream
+from dab.data import DABDataStream          # DAB data (packet mode) stream
+from dab.streamscfg import StreamsConfig    # streams.ini config
 import utils
-from dab.audio import DABAudioStream
-from dab.data import DABDataStream
 
 logger = logging.getLogger('server.dab')
 
@@ -34,7 +35,7 @@ class DABStreams():
     def __init__(self, config):
         self._srvcfg = config
 
-        self._streamscfg = None
+        self.config = None
         self.streams = []
 
     def _start_stream(self, stream, index, streamcfg):
@@ -68,21 +69,18 @@ class DABStreams():
         return False
 
     def start(self):
-        # Load streams configuration into memory
+        # Load streams.ini configuration into memory
+        self.config = StreamsConfig()
         cfgfile = self._srvcfg['dab']['stream_config']
-        os.makedirs(os.path.dirname(cfgfile), exist_ok=True)
-        self._streamscfg = configparser.ConfigParser()
-        if os.path.isfile(cfgfile):
-            self._streamscfg.read(cfgfile)
-        else:
-            logger.error(f'Unable to load DAB stream configuration: {cfgfile}')
+        if not self.config.load(cfgfile):
+            logger.error(f'Unable to load DAB streams configuration: {cfgfile}')
             return False
 
         # Start all streams one by one
         i = 0
         ret = True
-        for stream in self._streamscfg.sections():
-            if self._start_stream(stream, i, self._streamscfg[stream]):
+        for stream in self.config.cfg.sections():
+            if self._start_stream(stream, i, self.config.cfg[stream]):
                 i += 1
             else:
                 ret = False
@@ -93,7 +91,7 @@ class DABStreams():
     def getcfg(self, stream, default=False):
         if default:
             try:
-                return self._streamscfg[stream]
+                return self.config.cfg[stream]
             except KeyError:
                 return None
         else:
@@ -115,7 +113,7 @@ class DABStreams():
 
                 # Restore to the original stream
                 if newcfg is None:
-                    newcfg = self._streamscfg[stream]
+                    newcfg = self.config.cfg[stream]
 
                 # Stop the old stream
                 t.join()
@@ -131,7 +129,7 @@ class DABStreams():
 
 
     def stop(self):
-        if self._streamscfg is None:
+        if self.config is None:
             return
 
         for s, t, c, o in self.streams:
@@ -139,10 +137,18 @@ class DABStreams():
                 utils.remove_fifo(o)
             t.join()
 
+            # Attempt terminating if joining wasn't successfully (in case of a process)
+            if t.is_alive() and isinstance(t, multiprocessing.Process):
+                t.terminate()
+
+                # A last resort
+                if t.is_alive():
+                    t.kill()
+
         self.streams = []
 
     def restart(self):
-        if self._streamscfg is None:
+        if self.config is None:
             return False
 
         # Allow sockets some time to unbind
@@ -152,7 +158,7 @@ class DABStreams():
         return self.start()
 
     def status(self):
-        if self._streamscfg is None:
+        if self.config is None:
             return []
 
         streams = []
