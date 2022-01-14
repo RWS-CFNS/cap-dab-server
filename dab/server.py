@@ -220,8 +220,8 @@ class DABServer():
         if self.config is None:
             return (False, False, False, False)
 
-        server = self._odr.is_alive() if self._odr is not None else False
-        watcher = self._watcher.is_alive() if self._watcher is not None else False
+        server = self._odr.is_alive() if self._odr is not None else None
+        watcher = self._watcher.is_alive() if self._watcher is not None else None
         # FIXME check these properly
         mux = subproc.run(('pgrep', 'odr-dabmux'), capture_output=True).returncode == 0
         mod = subproc.run(('pgrep', 'odr-dabmod'), capture_output=True).returncode == 0

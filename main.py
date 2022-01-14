@@ -121,23 +121,31 @@ Invalid entry!
 ''',         title='Error', colors=True, width=60, height=8)
 
 def cap_restart(start=0, target=100):
+    GAUGE_HEIGHT = 6
+    GAUGE_WIDTH = 64
+
     d.gauge_update(start, 'Saving changes to CAP config, one moment please...', update_text=True)
     if capsrv.restart():
         d.gauge_update(target, 'Successfully saved!', update_text=True)
     else:
         d.gauge_stop()
-        d.msgbox('Failed to start CAP server, please refer to the server logs', title='Error', width=60, height=8)
+        d.msgbox('Failed to start CAP server, please refer to the server logs', title='Error',
+                 width=GAUGE_WIDTH, height=GAUGE_HEIGHT)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=target)
         time.sleep(4)
     time.sleep(0.5)
 
 def dab_restart(start=0, target=100):
+    GAUGE_HEIGHT = 6
+    GAUGE_WIDTH = 64
+
     # Restart DAB Streams
     d.gauge_update(start, 'Saving changes to DAB stream config, one moment please...', update_text=True)
 
     if not dabstreams.restart():
         d.gauge_stop()
-        d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error', width=60, height=8)
+        d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error',
+                 width=GAUGE_WIDTH, height=GAUGE_HEIGHT)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=target)
 
     # Restart DAB server
@@ -147,14 +155,17 @@ def dab_restart(start=0, target=100):
         time.sleep(0.5)
     else:
         d.gauge_stop()
-        d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error', width=60, height=8)
+        d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error',
+                 width=GAUGE_WIDTH, height=GAUGE_HEIGHT)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=target)
 
 def status():
     def state(b):
-        if b:
+        if b is None:
+            return '\Zb\Z1MISCFG\Zn'
+        elif b == True:
             return '\Zb\Z2OK\Zn'
-        else:
+        elif b == False:
             return '\Zb\Z1STOPPED\Zn'
 
     while True:
@@ -744,13 +755,14 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             # Write config and restart the DAB server
             # FIXME saving while announcement is playing keeps stream, but doesn't keep alarm announcement
             d.gauge_start('', height=6, width=64, percent=0)
-            dabsrv.config.write()
             dabstreams.config.write()
+            dabsrv.config.write()
             dab_restart()
             d.gauge_stop()
             break
         elif code in (Dialog.CANCEL, Dialog.ESC):
             # Restore the old config
+            dabstreams.config.restore()
             dabsrv.config.restore()
             break
         elif tag == 'Ensemble':
@@ -992,14 +1004,16 @@ def main():
     # Setup a queue for synchronizing data between the CAP and DAB threads
     q = queue.Queue(maxsize=int(config['general']['queuelimit']))
 
-    # Start up CAP server
     GAUGE_HEIGHT = 6
     GAUGE_WIDTH = 64
+
+    # Start up CAP server
     d.gauge_start('Starting CAP Server...', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=0)
     capsrv = CAPServer(config, q)
     if not capsrv.start():
         d.gauge_stop()
-        d.msgbox('Failed to start CAP server, please refer to the server logs', title='Error', width=60, height=8)
+        d.msgbox('Failed to start CAP server, please refer to the server logs', title='Error',
+                 width=GAUGE_WIDTH, height=GAUGE_HEIGHT)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=0)
 
     # Start the DAB streams
@@ -1007,7 +1021,8 @@ def main():
     dabstreams = DABStreams(config)
     if not dabstreams.start():
         d.gauge_stop()
-        d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error', width=60, height=8)
+        d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error',
+                 width=GAUGE_WIDTH, height=GAUGE_HEIGHT)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=33)
 
     # Start the DAB server
@@ -1015,7 +1030,8 @@ def main():
     dabsrv = DABServer(config, q, dabstreams)
     if not dabsrv.start():
         d.gauge_stop()
-        d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error', width=60, height=8)
+        d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error',
+                 width=GAUGE_WIDTH, height=GAUGE_HEIGHT)
         d.gauge_start('', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=66)
 
     d.gauge_update(100, 'Ready!', update_text=True)

@@ -63,6 +63,8 @@ class DABStreams():
         except Exception as e:
             logger.error(f'Unable to start DAB stream "{stream}". {e}')
 
+        self.streams.insert(index, (stream, None, streamcfg, None))
+
         if out is not None:
             utils.remove_fifo(out)
 
@@ -106,7 +108,7 @@ class DABStreams():
         i = 0
         for s, t, c, o in self.streams:
             # Get the current stream
-            if s == stream:
+            if s == stream and c is not None:
                 # Check if this stream is an audio stream
                 if c['output_type'] == 'data':
                     return
@@ -116,11 +118,20 @@ class DABStreams():
                     newcfg = self.config.cfg[stream]
 
                 # Stop the old stream
-                t.join()
                 del self.streams[i]
+                if t is not None:
+                    t.join()
 
-                # Allow sockets some time to unbind (FIXME needed?)
-                time.sleep(4)
+                    # Attempt terminating if joining wasn't successful (in case of a process)
+                    if t.is_alive() and isinstance(t, multiprocessing.Process):
+                        t.terminate()
+
+                        # A last resort
+                        if t.is_alive():
+                            t.kill()
+
+                    # Allow sockets some time to unbind (FIXME needed?)
+                    time.sleep(4)
 
                 # And fire up the new one
                 return self._start_stream(stream, i, newcfg)
@@ -135,15 +146,17 @@ class DABStreams():
         for s, t, c, o in self.streams:
             if o is not None:
                 utils.remove_fifo(o)
-            t.join()
 
-            # Attempt terminating if joining wasn't successfully (in case of a process)
-            if t.is_alive() and isinstance(t, multiprocessing.Process):
-                t.terminate()
+            if t is not None:
+                t.join()
 
-                # A last resort
-                if t.is_alive():
-                    t.kill()
+                # Attempt terminating if joining wasn't successful (in case of a process)
+                if t.is_alive() and isinstance(t, multiprocessing.Process):
+                    t.terminate()
+
+                    # A last resort
+                    if t.is_alive():
+                        t.kill()
 
         self.streams = []
 
@@ -158,12 +171,10 @@ class DABStreams():
         return self.start()
 
     def status(self):
-        if self.config is None:
-            return []
-
         streams = []
 
-        for s, t, c, o in self.streams:
-            streams.append((s, t.is_alive()))
+        if self.config is not None:
+            for s, t, c, o in self.streams:
+                streams.append((s, t.is_alive() if t is not None else None))
 
         return streams
