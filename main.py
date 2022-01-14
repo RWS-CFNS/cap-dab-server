@@ -286,181 +286,14 @@ def dab_config():
             elif tag == 'Announcements':
                 announcements()
 
-    def services(streamscfg):
-        def modify(service):
-            localtitle = f'{service} - Services - {TITLE}'
-
-            def announcements(service):
-                dabsrv.config.cfg.services[service].announcements
-
-                menu = [(k, v, bool(dabsrv.config.cfg.services[service].announcements.getboolean(k))) for k, v in dab.types.ANNOUNCEMENT_TYPES.items()]
-
-                code, tags = d.checklist('', title=f'Announcements - {localtitle}', choices=menu)
-
-                if code == Dialog.OK:
-                    for k in dab.types.ANNOUNCEMENT_TYPES.keys():
-                        dabsrv.config.cfg.services[service].announcements[k] = str(bool(k in tags)).lower()
-
-            def stream(service):
-                menu = []
-
-                # Load streams into the menu list
-                i = 0
-                for stream in streamscfg.sections():
-                    menu.insert(i, (stream, streamscfg[stream]['output_type'].title() + ' stream', False))
-                    i += 1
-
-                code, tag = d.radiolist('', title=f'Stream - {localtitle}', choices=menu)
-
-                if code == Dialog.OK:
-                    dabsrv.config.cfg.components[f'comp-{service}'].subchannel = tag
-
-            # TODO check if required fields have been entered (label and ID)
-
-            while True:
-                code, tag = d.menu('', title=localtitle, extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
-                                  ('ID',              'Change the service ID (REQ)'),
-                                  ('Country',         'Override the Country from the ensemble default (OPT)'),
-                                  ('Label',           'Change the service label (REQ)'),
-                                  ('Programme Type',  'Change the programme type (OPT)'),
-                                  ('Announcements',   'Select which announcement to support on this service (OPT)'),
-                                  ('Clusters',        'Change which announcement cluster this service belong to (OPT)'),
-                                  ('Stream',          'Configure which stream this service should broadcast (REQ)')
-                                  ])
-
-                if code in (Dialog.CANCEL, Dialog.ESC):
-                    break
-                elif code == Dialog.EXTRA:
-                    yncode = d.yesno(f'Are you sure you want to delete the service {service}?', width=60, height=6)
-                    if yncode == Dialog.OK:
-                        # TODO check streamscfg for references in "services" tag and delete where needed
-
-                        del dabsrv.config.cfg.services[service]
-                        del dabsrv.config.cfg.components[f'comp-{service}']
-                        break
-                elif tag == 'ID':
-                    sid = str(dabsrv.config.cfg.services[service]['id'])
-
-                    # TODO generate our own service ID if left blank
-
-                    while True:
-                        code, elems = d.form('''
-The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a service.
-''',                                         title=f'Service ID - {localtitle}', colors=True, elements=[
-                                            ('', 1, 1, sid[3:], 1, 1, 4, 3)
-                                            ])
-
-                        if code == Dialog.OK:
-                            if not all(c in string.hexdigits for c in elems[0]):
-                                _error('\ZbService ID\Zn must be a hexadecimal number')
-                                continue
-
-                            if len(elems[0]) != 3:
-                                _error('Invalid length.\n\ZbService ID\Zn must be 3 hexadecimal digits in length.')
-                                continue
-
-                            if len(sid) == 0:
-                                sid = f'0x{str(dabsrv.config.cfg.ensemble["id"])[2:-3]}'
-
-                            dabsrv.config.cfg.services[service]['id'] = sid[:3] + elems[0]
-
-                        break
-                elif tag == 'Country':
-                    sid = str(dabsrv.config.cfg.services[service]['id'])
-
-                    ecc, cid = _country_config(localtitle, str(dabsrv.config.cfg.services[service]['ecc']), sid, True)
-
-                    # TODO check if Service ID is already in use
-
-                    if cid is None and ecc is None:
-                        ensemble_cid = str(dabsrv.config.cfg.ensemble['id'])[2:-3]
-
-                        dabsrv.config.cfg.services[service]['id'] = f'0x{ensemble_cid}{sid[3:]}'
-                        del dabsrv.config.cfg.services[service]['ecc']
-                    else:
-                        dabsrv.config.cfg.services[service]['id'] = str(hex(cid)) + sid[3:]
-                        dabsrv.config.cfg.services[service]['ecc'] = str(hex(ecc))
-                elif tag == 'Label':
-                    label, shortlabel = _label_config(localtitle,
-                                                      str(dabsrv.config.cfg.services[service]['label']),
-                                                      str(dabsrv.config.cfg.services[service]['shortlabel']))
-
-                    if label is not None:
-                        dabsrv.config.cfg.services[service]['label'] = label
-
-                        if shortlabel is not None:
-                            dabsrv.config.cfg.services[service]['shortlabel'] = shortlabel
-                        else:
-                            del dabsrv.config.cfg.services[service]['shortlabel']
-                elif tag == 'Programme Type':
-                    pty = _pty_config(f'PTY - {localtitle}', int(str(dabsrv.config.cfg.services[service]['pty'])))
-
-                    if pty is not None:
-                        dabsrv.config.cfg.services[service]['pty'] = str(pty)
-                elif tag == 'Announcements':
-                    announcements(service)
-                elif tag == 'Clusters':
-                    # TODO implement
-                    _error('Not Yet Implemented')
-                elif tag == 'Stream':
-                    stream(service)
-
-        def add():
-            while True:
-                code, name = d.inputbox('Please enter a new identifier/name for this service (no spaces)',
-                                        title=f'Add - Service - {TITLE}')
-
-                if code in (Dialog.CANCEL, Dialog.ESC):
-                    break
-                elif name == '':
-                    _error('Identifier cannot be empty.')
-                elif ' ' in name:
-                    _error('Identifier cannot contain spaces.')
-                else:
-                    dabsrv.config.cfg.services[name]
-                    dabsrv.config.cfg.components[f'comp-{name}']['service'] = name
-                    modify(name)
-                    break
-
-        while True:
-            menu = [('Add', 'Add a new service')]
-
-            # Load in services from multiplexer config
-            i = 0
-            for key, value in dabsrv.config.cfg.services:
-                label = str(dabsrv.config.cfg.services[key]['label']) # TODO CHANGE
-                if label == '':
-                    del dabsrv.config.cfg.services[key]['label']
-
-                menu.insert(i, (key, label))
-                i += 1
-
-            code, tag = d.menu('Please select a service', title=f'Services - {TITLE}', cancel_label='Back', choices=menu)
-
-            if code in (Dialog.CANCEL, Dialog.ESC):
-                break
-            elif tag == 'Add':
-                add()
-            elif code == Dialog.OK:
-                modify(tag)
-
     def streams(streamscfg):
         def modify(stream):
             localtitle = f'{stream} - Streams - {TITLE}'
 
             def stream_input():
-                if 'input_type' in streamscfg[stream]:
-                    input_type = streamscfg[stream]['input_type']
-                else:
-                    input_type = 'gst'
-                if 'input' in streamscfg[stream]:
-                    inputuri = streamscfg[stream]['input']
-                else:
-                    inputuri = ''
-                if 'output_type' in streamscfg[stream]:
-                    output_type = streamscfg[stream]['output_type']
-                else:
-                    output_type = 'dabplus'
+                input_type = streamscfg[stream]['input_type']
+                inputuri = streamscfg[stream]['input']
+                output_type = streamscfg[stream]['output_type']
 
                 # Configure the output type
                 menu_output = {
@@ -474,6 +307,7 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 if code in (Dialog.CANCEL, Dialog.ESC):
                     return
                 output_type = next(k for k, v in menu_output.items() if v[0] == tag)
+                print(output_type)
 
                 # Configure the input type
                 menu_input = {
@@ -485,7 +319,7 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 if output_type != 'data':
                     menu_input['gst'] = ['GStreamer',   'Specify a GStreamer URI as input stream', False]
                 elif input_type == 'gst':
-                    input_type == 'fifo'
+                    input_type = 'fifo'
 
                 menu_input[input_type][2] = True
 
@@ -533,10 +367,9 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                             ['192',  '192 kbps', False]
                            ]
 
-                if 'bitrate' in streamscfg[stream]:
-                    # This is probably super inefficient but whatever
-                    cur = streamscfg[stream]['bitrate']
-                    bitrates[next(bitrates.index(b) for b in bitrates if b[0] == cur)][2] = True
+                # This is probably super inefficient but whatever
+                cur = streamscfg[stream]['bitrate']
+                bitrates[next(bitrates.index(b) for b in bitrates if b[0] == cur)][2] = True
 
                 code, tag = d.radiolist('', title=f'Bitrate - {localtitle}', no_tags=True, choices=bitrates)
                 if code in (Dialog.CANCEL, Dialog.ESC):
@@ -544,10 +377,10 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 streamscfg[stream]['bitrate'] = tag
 
             def protection():
-                _error('Not Yet Implemented')
+                _error('Not Yet Implemented. Default is: EEP_A 3. Configure in streams.ini')
 
             def pad_components():
-                _error('Not Yet Implemented')
+                _error('Not Yet Implemented. Default is: DLS enabled, MOT slideshow disabled. Configure in streams.ini')
 
             while True:
                 code, tag = d.menu('', title=localtitle, extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
@@ -584,7 +417,18 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 elif ' ' in name:
                     _error('Identifier cannot contain spaces.')
                 else:
+                    # Set some sane defaults
                     streamscfg[name] = {}
+                    streamscfg[name]['input_type'] = 'gst'
+                    streamscfg[name]['input'] = 'http://127.0.0.1:1234'
+                    streamscfg[name]['output_type'] = 'dabplus'
+                    streamscfg[name]['bitrate'] = '88'
+                    streamscfg[name]['protection_profile'] = 'EEP_A'
+                    streamscfg[name]['protection'] = '3'
+                    streamscfg[name]['dls_enable'] = 'yes'
+                    streamscfg[name]['mot_enable'] = 'no'
+                    streamscfg[name]['pad_length'] = '58'
+
                     modify(name)
                     break
 
@@ -603,6 +447,180 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 break
             elif tag == 'Add':
                 add()
+            elif code == Dialog.OK:
+                modify(tag)
+
+    def services(streamscfg):
+        def modify(service=''):
+            localtitle = f'{service} - Services - {TITLE}'
+
+            def set_id(service, no_cancel=False):
+                sid = str(dabsrv.config.cfg.services[service]['id'])
+
+                # TODO generate our own service ID if left blank
+
+                while True:
+                    code, elems = d.form('''
+The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a service.
+''',                                     title=f'Service ID - {localtitle}', colors=True, no_cancel=no_cancel, elements=[
+                                        ('', 1, 1, sid[3:], 1, 1, 4, 3)
+                                        ])
+
+                    if no_cancel == False and code in (Dialog.CANCEL, Dialog.ESC):
+                        break
+                    elif code == Dialog.OK:
+                        if not all(c in string.hexdigits for c in elems[0]):
+                            _error('\ZbService ID\Zn must be a hexadecimal number')
+                            continue
+
+                        if len(elems[0]) != 3:
+                            _error('Invalid length.\n\ZbService ID\Zn must be 3 hexadecimal digits in length.')
+                            continue
+
+                        if len(sid) == 0:
+                            sid = f'0x{str(dabsrv.config.cfg.ensemble["id"])[2:-3]}'
+
+                        dabsrv.config.cfg.services[service]['id'] = sid[:3] + elems[0]
+                        break
+
+            def announcements(service):
+                dabsrv.config.cfg.services[service].announcements
+
+                menu = [(k, v, bool(dabsrv.config.cfg.services[service].announcements.getboolean(k))) for k, v in dab.types.ANNOUNCEMENT_TYPES.items()]
+
+                code, tags = d.checklist('', title=f'Announcements - {localtitle}', choices=menu)
+
+                if code == Dialog.OK:
+                    for k in dab.types.ANNOUNCEMENT_TYPES.keys():
+                        dabsrv.config.cfg.services[service].announcements[k] = str(bool(k in tags)).lower()
+
+            def stream(service, no_cancel=True):
+                menu = []
+
+                # Load streams into the menu list
+                i = 0
+                for stream in streamscfg.sections():
+                    menu.insert(i, (stream, streamscfg[stream]['output_type'].title() + ' stream', False))
+                    i += 1
+
+                # TODO select current stream
+
+                while True:
+                    code, tag = d.radiolist('', title=f'Stream - {localtitle}', no_cancel=no_cancel, choices=menu)
+
+                    if code == Dialog.OK:
+                        dabsrv.config.cfg.components[f'comp-{service}'].subchannel = tag
+                        break
+
+            # Add a new service
+            if service == '':
+                while True:
+                    code, service = d.inputbox('Please enter a new identifier/name for this service (no spaces)',
+                                            title=f'Add - Service - {TITLE}')
+
+                    if code in (Dialog.CANCEL, Dialog.ESC):
+                        return
+                    elif service == '':
+                        _error('Identifier cannot be empty.')
+                    elif ' ' in service:
+                        _error('Identifier cannot contain spaces.')
+                    else:
+                        dabsrv.config.cfg.services[service]
+                        dabsrv.config.cfg.components[f'comp-{service}']['service'] = service
+
+                        # Configure required components
+                        localtitle = f'{service} - Services - {TITLE}'
+                        set_id(service, no_cancel=True)
+                        stream(service, no_cancel=True)
+
+                        # Set some sane defaults
+                        dabsrv.config.cfg.services[service]['label'] = 'DAB Service'
+                        dabsrv.config.cfg.services[service]['shortlabel'] = 'Service'
+
+                        break
+
+            while True:
+                code, tag = d.menu('', title=localtitle, extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
+                                  ('ID',              'Change the service ID'),
+                                  ('Country',         'Override the Country from the ensemble default (Optional)'),
+                                  ('Label',           'Change the service label'),
+                                  ('Programme Type',  'Change the programme type (Optional)'),
+                                  ('Announcements',   'Select which announcement to support on this service (Optional)'),
+                                  ('Clusters',        'Change which announcement cluster this service belong to (Optional)'),
+                                  ('Stream',          'Configure which stream this service should broadcast')
+                                  ])
+
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    break
+                elif code == Dialog.EXTRA:
+                    yncode = d.yesno(f'Are you sure you want to delete the service {service}?', width=60, height=6)
+                    if yncode == Dialog.OK:
+                        # TODO check streamscfg for references in "services" tag and delete where needed
+
+                        del dabsrv.config.cfg.services[service]
+                        del dabsrv.config.cfg.components[f'comp-{service}']
+                        break
+                elif tag == 'ID':
+                    set_id(service)
+                elif tag == 'Country':
+                    sid = str(dabsrv.config.cfg.services[service]['id'])
+
+                    ecc, cid = _country_config(localtitle, str(dabsrv.config.cfg.services[service]['ecc']), sid, True)
+
+                    # TODO check if Service ID is already in use
+
+                    if cid is None and ecc is None:
+                        ensemble_cid = str(dabsrv.config.cfg.ensemble['id'])[2:-3]
+
+                        dabsrv.config.cfg.services[service]['id'] = f'0x{ensemble_cid}{sid[3:]}'
+                        del dabsrv.config.cfg.services[service]['ecc']
+                    else:
+                        dabsrv.config.cfg.services[service]['id'] = str(hex(cid)) + sid[3:]
+                        dabsrv.config.cfg.services[service]['ecc'] = str(hex(ecc))
+                elif tag == 'Label':
+                    label, shortlabel = _label_config(localtitle,
+                                                      str(dabsrv.config.cfg.services[service]['label']),
+                                                      str(dabsrv.config.cfg.services[service]['shortlabel']))
+
+                    if label is not None:
+                        dabsrv.config.cfg.services[service]['label'] = label
+
+                        if shortlabel is not None:
+                            dabsrv.config.cfg.services[service]['shortlabel'] = shortlabel
+                        else:
+                            del dabsrv.config.cfg.services[service]['shortlabel']
+                elif tag == 'Programme Type':
+                    pty = _pty_config(f'PTY - {localtitle}', int(str(dabsrv.config.cfg.services[service]['pty'])))
+
+                    if pty is not None:
+                        dabsrv.config.cfg.services[service]['pty'] = str(pty)
+                elif tag == 'Announcements':
+                    announcements(service)
+                elif tag == 'Clusters':
+                    # TODO implement
+                    _error('Not Yet Implemented')
+                elif tag == 'Stream':
+                    stream(service)
+
+        while True:
+            menu = [('Add', 'Add a new service')]
+
+            # Load in services from multiplexer config
+            i = 0
+            for key, value in dabsrv.config.cfg.services:
+                label = str(dabsrv.config.cfg.services[key]['label']) # TODO CHANGE
+                if label == '':
+                    del dabsrv.config.cfg.services[key]['label']
+
+                menu.insert(i, (key, label))
+                i += 1
+
+            code, tag = d.menu('Please select a service', title=f'Services - {TITLE}', cancel_label='Back', choices=menu)
+
+            if code in (Dialog.CANCEL, Dialog.ESC):
+                break
+            elif tag == 'Add':
+                modify()
             elif code == Dialog.OK:
                 modify(tag)
 
@@ -706,8 +724,8 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
     while True:
         code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[
                           ('Ensemble',          'Configure the ensemble'),
-                          ('Services',          'Add/Modify services'),
                           ('Streams',           'Add/Modify/Set the service streams/subchannels'),
+                          ('Services',          'Add/Modify services'),
                           ('Warning settings',  'Configure various settings related to warning messages'),
                           ])
 
@@ -729,10 +747,10 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             break
         elif tag == 'Ensemble':
             ensemble()
-        elif tag == 'Services':
-            services(streamscfg)
         elif tag == 'Streams':
             streams(streamscfg)
+        elif tag == 'Services':
+            services(streamscfg)
         elif tag == 'Warning settings':
             warning_config()
 
@@ -837,10 +855,10 @@ def cap_config():
             ('Server port',         2, 1, config['cap']['port'],            2, 20, 6,  5,   0,
              'Port to host CAP HTTP server on'),
 
-            ('Identifier prefix',   3, 1, config['cap']['identifier'],      3, 20, 32, 128, 0,
+            ('Identifier prefix',   3, 1, config['cap']['identifier'],      3, 20, 46, 128, 0,
              'String to prefix to the CAP message identifier: format will be: {prefix}.{msg_counter}'),
 
-            ('Sender',              4, 1, config['cap']['sender'],          4, 20, 32, 128, 0,
+            ('Sender',              4, 1, config['cap']['sender'],          4, 20, 46, 128, 0,
              'CAP sender identifier'),
 
             ('Strict parsing',      5, 1, config['cap']['strict_parsing'],  5, 20, 4,  3,   0,

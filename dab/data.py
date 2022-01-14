@@ -35,6 +35,7 @@ import os               # For creating directories
 from struct import *    # For generating DAB MSC and Packet headers
 import threading        # Threading support (for running streams in the background)
 import time             # For sleep support
+import utils
 
 logger = logging.getLogger('server.dab')
 
@@ -196,10 +197,15 @@ class DABDataStream(threading.Thread):
         os.makedirs(f'{self.streamdir}/logs', exist_ok=True)
 
         # TODO check if this is a fifo and create if needed/check for existence file
+        path = streamcfg['input']
         if streamcfg['input_type'] == 'fifo':
-            pass
+            utils.create_fifo(path)
         elif streamcfg['input_type'] == 'file':
-            pass
+            if not os.path.exists(path):
+                raise Exception('DAB data source file does not exist!')
+
+            if not os.path.isfile(path):
+                raise Exception('DAB data source is not a file!')
 
         self._running = True
 
