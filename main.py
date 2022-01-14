@@ -449,8 +449,18 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             localtitle = f'{stream} - Streams - {TITLE}'
 
             def stream_input():
-                output_type = streamscfg[stream]['output_type']
-                input_type = streamscfg[stream]['input_type']
+                if 'input_type' in streamscfg[stream]:
+                    input_type = streamscfg[stream]['input_type']
+                else:
+                    input_type = 'gst'
+                if 'input' in streamscfg[stream]:
+                    inputuri = streamscfg[stream]['input']
+                else:
+                    inputuri = ''
+                if 'output_type' in streamscfg[stream]:
+                    output_type = streamscfg[stream]['output_type']
+                else:
+                    output_type = 'dabplus'
 
                 # Configure the output type
                 menu_output = {
@@ -458,10 +468,12 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                     'dabplus':  ['DAB+',    'AAC+ audio stream', False],
                     'data':     ['Data',    'Arbitrary data stream', False]
                 }
-                if 'output_type' in streamscfg[stream]:
-                    menu_output[output_type][2] = True
+                menu_output[output_type][2] = True
 
                 code, tag = d.radiolist('', title=f'Stream Output - {localtitle}', choices=list(menu_output.values()))
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    return
+                output_type = next(k for k, v in menu_output.items() if v[0] == tag)
 
                 # Configure the input type
                 menu_input = {
@@ -472,18 +484,64 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 # Data output can't use gstreamer as input, because odr-audioenc is not used
                 if output_type != 'data':
                     menu_input['gst'] = ['GStreamer',   'Specify a GStreamer URI as input stream', False]
+                elif input_type == 'gst':
+                    input_type == 'fifo'
 
-                if 'input_type' in streamscfg[stream]:
-                    menu_input[input_type][2] = True
+                menu_input[input_type][2] = True
 
                 code, tag = d.radiolist('', title=f'Stream Input - {localtitle}', choices=list(menu_input.values()))
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    return
+                input_type = next(k for k, v in menu_input.items() if v[0] == tag)
 
                 # Configure the input URI/Path
-                _error('Not Yet Implemented')
-                # TODO
+                code, string = d.inputbox('Please enter the input URI/Path',
+                                            title=f'Stream Input Path - {localtitle}', init=inputuri)
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    return
+                inputuri = string
+
+                streamscfg[stream]['input_type'] = input_type
+                streamscfg[stream]['output_type'] = output_type
+                streamscfg[stream]['input'] = inputuri
 
             def bitrate():
-                _error('Not Yet Implemented')
+                bitrates = [
+                            ['8',    '8 kbps',   False],
+                            ['16',   '16 kbps',  False],
+                            ['24',   '24 kbps',  False],
+                            ['32',   '32 kbps',  False],
+                            ['40',   '40 kbps',  False],
+                            ['48',   '48 kbps',  False],
+                            ['56',   '56 kbps',  False],
+                            ['64',   '64 kbps',  False],
+                            ['72',   '72 kbps',  False],
+                            ['80',   '80 kbps',  False],
+                            ['88',   '88 kbps',  False],
+                            ['96',   '96 kbps',  False],
+                            ['104',  '104 kbps', False],
+                            ['112',  '112 kbps', False],
+                            ['120',  '120 kbps', False],
+                            ['128',  '128 kbps', False],
+                            ['136',  '136 kbps', False],
+                            ['144',  '144 kbps', False],
+                            ['152',  '152 kbps', False],
+                            ['160',  '160 kbps', False],
+                            ['168',  '168 kbps', False],
+                            ['176',  '176 kbps', False],
+                            ['184',  '184 kbps', False],
+                            ['192',  '192 kbps', False]
+                           ]
+
+                if 'bitrate' in streamscfg[stream]:
+                    # This is probably super inefficient but whatever
+                    cur = streamscfg[stream]['bitrate']
+                    bitrates[next(bitrates.index(b) for b in bitrates if b[0] == cur)][2] = True
+
+                code, tag = d.radiolist('', title=f'Bitrate - {localtitle}', no_tags=True, choices=bitrates)
+                if code in (Dialog.CANCEL, Dialog.ESC):
+                    return
+                streamscfg[stream]['bitrate'] = tag
 
             def protection():
                 _error('Not Yet Implemented')
@@ -493,15 +551,15 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
 
             while True:
                 code, tag = d.menu('', title=localtitle, extra_button=True, extra_label='Delete', cancel_label='Back', choices=[
-                                ('Stream Input',    'Configure the stream input'),
-                                ('Bitrate',         'Configure the bitrate to broadcast this stream at'),
-                                ('Protection',      'Configure the DAB protection level for the subchannel'),
-                                ('PAD Components',  'Configure PAD components for this subchannel')
-                                #('DLS',               ''),
-                                #('Slideshow',         ''),
-                                #('Slideshow Timeout', ''),
-                                #('Pad length',        '')
-                                ])
+                                  ('Stream Input',    'Configure the stream input'),
+                                  ('Bitrate',         'Configure the bitrate to broadcast this stream at'),
+                                  ('Protection',      'Configure the DAB protection level for the subchannel'),
+                                  ('PAD Components',  'Configure PAD components for this subchannel')
+                                  #('DLS',               ''),
+                                  #('Slideshow',         ''),
+                                  #('Slideshow Timeout', ''),
+                                  #('Pad length',        '')
+                                  ])
 
                 if code in (Dialog.CANCEL, Dialog.ESC):
                     break
@@ -638,15 +696,12 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
     streamscfg = configparser.ConfigParser()
     if os.path.isfile(cfgfile):
         streamscfg.read(cfgfile)
-    else:
-        logger.error(f'Unable to load DAB stream configuration: {cfgfile}')
-        return False
 
-    # Before doing anything, create a copy of the current config files
-    streamscfg_bak = copy.deepcopy(streamscfg)
+        # Before doing anything, create a copy of the current config files
+        streamscfg_bak = copy.deepcopy(streamscfg)
     dabsrv.config.save()
 
-    # TODO also create a copy of streams.ini and server.ini
+    # TODO also create a copy of server.ini
 
     while True:
         code, tag = d.menu('', title=TITLE, extra_button=True, extra_label='Save', choices=[

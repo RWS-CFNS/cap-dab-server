@@ -148,17 +148,17 @@ class ODRMuxConfig():
         # Create a default Pseudo alarm announcement subchannel
         #  This sub-channel is an integral part of the PoC and aims to support warning messages on devices that don't
         #  support DAB-EWF or even the DAB Alarm Announcement.
-        self.cfg.ensemble.announcements.alarm['cluster'] = '1'
-        self.cfg.ensemble.announcements.alarm.flags['Alarm'] = 'true'
-        self.cfg.ensemble.announcements.alarm['subchannel'] = 'sub-alarm'
+        #self.cfg.ensemble.announcements.alarm['cluster'] = '1'
+        #self.cfg.ensemble.announcements.alarm.flags['Alarm'] = 'true'
+        #self.cfg.ensemble.announcements.alarm['subchannel'] = 'sub-alarm'
 
-        self.cfg.services['srv-alarm']['id'] = '0x8AAA'
-        self.cfg.services['srv-alarm']['label'] = 'NL-Alert'
-        self.cfg.services['srv-alarm']['shortlabel'] = 'NL-Alert'
-        self.cfg.services['srv-alarm']['pty'] = '3'
-        self.cfg.services['srv-alarm']['pty-sd'] = 'static'
-        self.cfg.services['srv-alarm']['announcements']['Alarm'] = 'true'
-        self.cfg.services['srv-alarm']['announcements']['clusters'] = '1'
+        #self.cfg.services['srv-alarm']['id'] = '0x8AAA'
+        #self.cfg.services['srv-alarm']['label'] = 'NL-Alert'
+        #self.cfg.services['srv-alarm']['shortlabel'] = 'NL-Alert'
+        #self.cfg.services['srv-alarm']['pty'] = '3'
+        #self.cfg.services['srv-alarm']['pty-sd'] = 'static'
+        #self.cfg.services['srv-alarm']['announcements']['Alarm'] = 'true'
+        #self.cfg.services['srv-alarm']['announcements']['clusters'] = '1'
 
         if not overwrite():
             return False

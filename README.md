@@ -76,6 +76,9 @@ TODO
 - [ ] Implement more of the CAP spec (message updates, ...)
 - [ ] Split admin interface from server component
 
+# Known issues
+- DAB data streams don't properly shut down because read blocks the stream thread
+
 # License
 This project is licensed under the GNU General Public License v3.0. See
 `LICENSE` for more information.
