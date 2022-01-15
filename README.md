@@ -69,15 +69,12 @@ TODO
 # Configuration
 Configuration is largely done using the Admin TUI (Terminal User Interface).
 
----
-**NOTE**
-
-Currently the Admin Interface is closely integrated with the CAP-DAB server.
-This means the cap-dab-server is not able to run in the background. Running the
-server is the background is still possible using terminal
-multiplexer such as GNU Screen and detaching from the session.
-
----
+> **NOTE**
+>
+> Currently the Admin Interface is closely integrated with the CAP-DAB server.
+> This means the cap-dab-server is not able to run in the background. Running the
+> server is the background is still possible using terminal
+> multiplexer such as GNU Screen and detaching from the session.
 
 A DAB in cap-dab-server ensemble consists of services and streams. A DAB
 ensemble is broken down into one or more services. Services provide _one_
@@ -101,13 +98,10 @@ $ ./main.py
 In section 'Alarm announcements', we'll configure which announcement will switch
 to which stream later.
 
----
-**NOTE**
-
-When navigating back to `DAB Configuration`, make sure to press `Save` to save
-your configured changes and restart the DAB server.
-
----
+> **NOTE**
+>
+> When navigating back to `DAB Configuration`, make sure to press `Save` to save
+> your configured changes and restart the DAB server.
 
 ## Services and Streams
 When cap-dab-server is first started, a simple ensemble is automatically
@@ -139,13 +133,10 @@ Let's add a new __service__ now.
    From here, you can optionally configure any other service parameters if you
    desire.
 
----
-**NOTE**
-
-When navigating back to `DAB Configuration`, make sure to press `Save` to save
-your configured changes and restart the DAB server.
-
----
+> **NOTE**
+>
+> When navigating back to `DAB Configuration`, make sure to press `Save` to save
+> your configured changes and restart the DAB server.
 
 ## Broadcasting
 From the main menu, check that
