@@ -102,7 +102,7 @@ In section 'Alarm announcements', we'll configure which announcement will switch
 to which stream later.
 
 ---
-**IMPORTANT*
+**NOTE**
 
 When navigating back to `DAB Configuration`, make sure to press `Save` to save
 your configured changes and restart the DAB server.
@@ -114,7 +114,7 @@ When cap-dab-server is first started, a simple ensemble is automatically
 configured, but services and stream have to be added manually before you can
 begin broadcasting.
 
-Let's add a stream first.
+Let's add a __stream__ first.
 1. From the main menu, go to `DAB` > `Streams` > `Add`.
 2. Enter a simple identifier for the stream such as `sub-audio`.
 3. Now, set the stream source by selecting `Stream Input`. Let's make this a
@@ -130,7 +130,7 @@ Let's add a stream first.
    The remaining options can be modified later, but the defaults are relatively
    sane.
 
-Let's add a new service now.
+Let's add a new __service__ now.
 1. Navigate back to `DAB Configuration` and go to `Services` > `Add`.
 2. Enter a identifier such as `srv-audio` and press `Return`.
 3. For the service ID, use any value, such as `dab` and press `Return`.
@@ -140,7 +140,7 @@ Let's add a new service now.
    desire.
 
 ---
-**IMPORTANT*
+**NOTE**
 
 When navigating back to `DAB Configuration`, make sure to press `Save` to save
 your configured changes and restart the DAB server.
