@@ -1,5 +1,5 @@
-cap-dab-server is a piece of software that combines exisiting technologies
-(ODR-mmbTools) into a solution capable of translating CAP (Common
+cap-dab-server is a piece of software that combines existing DAB broadcasting
+utilities (from ODR-mmbTools) into a solution capable of translating CAP (Common
 Alerting Protocol) messages to a DAB/DAB+ emergency warning broadcast.
 
 ![Main menu](main_menu.png)
