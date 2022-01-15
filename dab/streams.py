@@ -33,6 +33,9 @@ logger = logging.getLogger('server.dab')
 # Class that manages individual DAB stream threads
 class DABStreams():
     def __init__(self, config):
+        # Set spawn instead of fork, locks up dialog otherwise (TODO find out why)
+        multiprocessing.set_start_method('spawn')
+
         self._srvcfg = config
 
         self.config = None

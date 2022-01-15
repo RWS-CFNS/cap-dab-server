@@ -227,7 +227,7 @@ class DABDataStream(multiprocessing.Process):
                         outfifo.write(packets)
                         outfifo.flush()
 
-            logger.warning(f'Failed to read from file {self.input} for data stream {self.name}. Retrying in 2 sec.')
+            #logger.warning(f'Failed to read from file {self.input} for data stream {self.name}. Retrying in 2 sec.')
             time.sleep(2)
 
     def join(self, timeout=3):

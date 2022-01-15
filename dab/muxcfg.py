@@ -78,13 +78,15 @@ class ODRMuxConfig():
                     self.cfg.subchannels[s]['inputuri'] = f'ipc://{o}'
                     self.cfg.subchannels[s]['zmq-buffer'] = '40'
                     self.cfg.subchannels[s]['zmq-prebuffering'] = '20'
-                elif input_type == 'file':
+                elif input_type in ('file', 'fifo'):
                     self.cfg.subchannels[s]['inputproto'] = 'file'
-                    self.cfg.subchannels[s]['inputuri'] = c['input']
-                elif input_type == 'fifo':
-                    self.cfg.subchannels[s]['inputproto'] = 'file'
-                    self.cfg.subchannels[s]['inputuri'] = c['input']
-                    self.cfg.subchannels[s]['nonblock'] = 'true'
+                    if output_type == 'data':
+                        self.cfg.subchannels[s]['inputuri'] = o
+                    else:
+                        self.cfg.subchannels[s]['inputuri'] = c['input']
+
+                    if input_type == 'fifo':
+                        self.cfg.subchannels[s]['nonblock'] = 'true'
 
                 i += 1
 

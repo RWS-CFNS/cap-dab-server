@@ -176,13 +176,14 @@ def status():
         states = [
             ['CAP HTTP Server', state(cap_server)],
             ['DAB Server',      state(dab_server)],
-            ['DAB Streams',     ''],
             ['DAB Multiplexer', state(dab_mux)],
             ['DAB Modulator',   state(dab_mod)]
         ]
 
         # Insert the state of DAB Streams in separate rows (after 'DAB Streams')
-        for s in dabstreams.status():
+        streamstates = dabstreams.status()
+        states.insert(2, ['DAB Streams', str(len(streamstates))])
+        for s in streamstates:
             states.insert(3, [f'  - {s[0]}', state(s[1])])
 
         # Format the states list into columns
@@ -620,7 +621,8 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                         else:
                             del dabsrv.config.cfg.services[service]['shortlabel']
                 elif tag == 'Programme Type':
-                    pty = _pty_config(f'PTY - {localtitle}', int(str(dabsrv.config.cfg.services[service]['pty'])))
+                    curpty = str(dabsrv.config.cfg.services[service]['pty'])
+                    pty = _pty_config(f'PTY - {localtitle}', int(curpty) if curpty != '' else 0)
 
                     if pty is not None:
                         dabsrv.config.cfg.services[service]['pty'] = str(pty)
