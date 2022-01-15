@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+	<identifier>demoAdapter.5375.Cancel.5375</identifier>
+	<sender>public-warning-portal@localhost</sender>
+	<sent>2021-06-24T13:52:58+02:00</sent>
+	<status>Actual</status>
+	<msgType>Cancel</msgType>
+	<scope>Public</scope>
+	<references>public-warning-portal@localhost,demoAdapter.5374.Alert.5374,2021-06-24T13:46:14+02:00</references>
+</alert>

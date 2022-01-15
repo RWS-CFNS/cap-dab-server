@@ -27,6 +27,7 @@ import utils
 logger = logging.getLogger('server.cap')
 msg_counter = 0
 
+# CAP message parser, this parser only parses looks at the subset of the CAP v1.2 standard supported by Dutch brokers
 class CAPParser():
     # Constants
     TYPE_LINK_TEST = 0
@@ -45,7 +46,7 @@ class CAPParser():
     def __init__(self, app, strict, identifier, sender):
         self.app = app
 
-        # parse stricty, adhering to not only the CAP v1.2 standard but also the NL Subbroker standards
+        # parse stricty, adhering to not only the CAP v1.2 standard but also the NL broker standards
         self.strict = strict
 
         self.src_identifier = identifier
@@ -106,7 +107,7 @@ class CAPParser():
         except ValueError:
             return None
 
-    # Check the elements in the <info> container for CAP v1.2 and NL Subbroker conformity
+    # Check the elements in the <info> container for CAP v1.2 and NL broker conformity
     def __check_info_elements(self, info):
         # List of _required_ elements in the <info> container
         info_elements = ('category', 'event', 'urgency', 'severity', 'certainty')
@@ -129,7 +130,7 @@ class CAPParser():
         if category != 'Safety':
             logger.warning(f'invalid category: {category}')
 
-        # these fields should always return 'Unknown' from an NL Subbroker
+        # these fields should always return 'Unknown' from an NL broker
         # though this may be different in practise, so we just throw a warning
         urgency = info.find(f'CAPv1.2:urgency', self.NS).text
         if urgency != 'Unknown':
@@ -153,7 +154,7 @@ class CAPParser():
 
         return True
 
-    # Check the elements in the <alert> container for CAP v1.2 and NL Subbroker conformity
+    # Check the elements in the <alert> container for CAP v1.2 and NL broker conformity
     def __check_elements(self, alert):
         # List of _required_ elements in the <alert> container
         alert_elements = ('identifier', 'sender', 'sent', 'status', 'msgType', 'scope')

@@ -41,37 +41,27 @@ class DABStreams():
         self.config = None
         self.streams = []
 
-    def _start_stream(self, stream, index, streamcfg):
-        # Create a temporary FIFO for output
-        out = utils.create_fifo()
-
+    def _start_stream(self, stream, index, output, streamcfg):
         try:
             if streamcfg['output_type'] == 'data':
-                logger.info(f'Starting up DAB data stream {stream}...')
-                thread = DABDataStream(self._srvcfg, stream, index, streamcfg, out)
+                thread = DABDataStream(self._srvcfg, stream, index, streamcfg, output)
             else:
-                logger.info(f'Starting up DAB audio stream {stream}...')
-
-                thread = DABAudioStream(self._srvcfg, stream, index, streamcfg, out)
+                thread = DABAudioStream(self._srvcfg, stream, index, streamcfg, output)
 
             thread.start()
 
-            self.streams.insert(index, (stream, thread, streamcfg, out))
+            self.streams.insert(index, (stream, thread, streamcfg, output))
+        except:
+            try:
+                self.streams.insert(index, (stream, None, streamcfg, None))
 
-            return True
-        except KeyError as e:
-            logger.error(f'Unable to start DAB stream "{stream}", check configuration. {e}')
-        except OSError as e:
-            logger.error(f'Unable to start DAB stream "{stream}", invalid streams config. {e}')
-        except Exception as e:
-            logger.error(f'Unable to start DAB stream "{stream}". {e}')
-
-        self.streams.insert(index, (stream, None, streamcfg, None))
-
-        if out is not None:
-            utils.remove_fifo(out)
-
-        return False
+                raise
+            except KeyError as e:
+                raise Exception(f'Check configuration. {e}')
+            except OSError as e:
+                raise Exception(f'Invalid streams config. {e}')
+            except Exception as e:
+                raise Exception(e)
 
     def start(self):
         # Load streams.ini configuration into memory
@@ -85,10 +75,22 @@ class DABStreams():
         i = 0
         ret = True
         for stream in self.config.cfg.sections():
-            if self._start_stream(stream, i, self.config.cfg[stream]):
-                i += 1
-            else:
+            logger.info(f'Starting up DAB stream {stream}...')
+
+            # Create a temporary FIFO for output
+            output = utils.create_fifo()
+
+            try:
+                self._start_stream(stream, i, output, self.config.cfg[stream])
+            except Exception as e:
+                logger.error(f'Unable to start DAB stream "{stream}". {e}.')
+
+                if output is not None:
+                    utils.remove_fifo(out)
+
                 ret = False
+            else:
+                i += 1
 
         return ret
 
@@ -121,7 +123,6 @@ class DABStreams():
                     newcfg = self.config.cfg[stream]
 
                 # Stop the old stream
-                del self.streams[i]
                 if t is not None:
                     t.join()
 
@@ -135,12 +136,13 @@ class DABStreams():
 
                     # Allow sockets some time to unbind (FIXME needed?)
                     time.sleep(4)
+                self.streams.pop(i)
 
                 # And fire up the new one
-                return self._start_stream(stream, i, newcfg)
+                self._start_stream(stream, i, o, newcfg)
+                return
 
             i += 1
-
 
     def stop(self):
         if self.config is None:

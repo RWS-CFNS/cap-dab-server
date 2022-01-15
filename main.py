@@ -89,6 +89,7 @@ else:
     config['warning'] = {
                          'alarm': 'yes',
                          'replace': 'yes',
+                         'data': 'yes',
                          'announcement': 'alarm',
                          'label': 'Alert',
                          'shortlabel': 'Alert',
@@ -446,6 +447,8 @@ def dab_config():
                 elif ' ' in name:
                     _error('Identifier cannot contain spaces.')
                 else:
+                    # TODO prompt to setup input right away
+
                     # Set some sane defaults
                     dabstreams.config.cfg[name] = {}
                     dabstreams.config.cfg[name]['input_type'] = 'gst'
@@ -692,13 +695,15 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             code, tags = d.checklist('Select the method by which you want the server to send DAB warning messages',
                                     title=f'Method - {localtitle}', choices=[
                     ('Alarm',    'DAB native Alarm announcement', config['warning'].getboolean('alarm')),
-                    ('Replace',  'Channel stream replacement', config['warning'].getboolean('replace'))
+                    ('Replace',  'Subchannel audio stream replacement', config['warning'].getboolean('replace')),
+                    ('Data',     'Subchannel data stream replacement', config['warning'].getboolean('data'))
                     ])
 
             if code == Dialog.OK:
                 # Save the changes
                 config['warning']['Alarm'] = 'yes' if 'Alarm' in tags else 'no'
                 config['warning']['Replace'] = 'yes' if 'Replace' in tags else 'no'
+                config['warning']['Data'] = 'yes' if 'Data' in tags else 'no'
 
         while True:
             code, tag = d.menu('', title=localtitle, cancel_label='Back', choices=[
@@ -933,7 +938,7 @@ def announce():
             subch = str(announcement.subchannel)
 
             # query the state of the announcement
-            state = bool(int(utils.mux_send(dabsrv.zmqsock, ('get', 'alarm', 'active'))))
+            state = bool(int(utils.mux_send(dabsrv.zmqsock, ('get', name, 'active'))))
 
             menu.append((f'{"* " if state else "  "}{name}', f'Cluster {cluster}: {supported} (Switch to "{subch}")'))
 
@@ -961,7 +966,7 @@ Announcements prefixed with a * are currently active.
 
             # Check if the announcement was successfully activated
             if out != 'ok':
-                d.msgbox(f'Error while (de)actvating announcement {announcement}: {out}', title='Error', width=60, height=8)
+                d.msgbox(f'Error while (de)activating announcement {announcement}: {out}', title='Error', width=60, height=8)
 
 def restart():
     # TODO implement

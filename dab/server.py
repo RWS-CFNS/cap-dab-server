@@ -159,15 +159,19 @@ class DABServer():
         try:
             self._odr = ODRServer(self._srvcfg)
             self._odr.start()
-        except KeyError as e:
-            logger.error(f'Unable to start DAB server thread, check configuration. {e}')
-            return False
-        except OSError as e:
-            logger.error(f'Unable to start DAB server thread, check output path. {e}')
-            return False
-        except Exception as e:
-            logger.error(f'Unable to start DAB server thread. {e}')
-            return False
+        except:
+            err = 'Unable to start DAB server thread.'
+            try:
+                raise
+            except KeyError as e:
+                logger.error(f'{err} check configuration. {e}')
+                return False
+            except OSError as e:
+                logger.error(f'{err} check output path. {e}')
+                return False
+            except Exception as e:
+                logger.error(f'{err} {e}')
+                return False
 
         # TODO check if multiplexer and modulator were successfully started
 
@@ -179,15 +183,19 @@ class DABServer():
         try:
             self._watcher = DABWatcher(self._srvcfg, self._q, self.zmqsock, self._streams, self.config)
             self._watcher.start()
-        except KeyError as e:
-            logger.error(f'Unable to start DAB watcher thread, check configuration. {e}')
-            return False
-        except OSError as e:
-            logger.error(f'Unable to start DAB watcher thread, invalid streams config. {e}')
-            return False
-        except Exception as e:
-            logger.error(f'Unable to start DAB watcher thread. {e}')
-            return False
+        except:
+            err = 'Unable to start DAB watcher thread.'
+            try:
+                raise
+            except KeyError as e:
+                logger.error(f'{err} Check configuration. {e}')
+                return False
+            except OSError as e:
+                logger.error(f'{err} invalid streams config. {e}')
+                return False
+            except Exception as e:
+                logger.error(f'{err} {e}')
+                return False
 
         return True
 

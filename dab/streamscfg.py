@@ -26,8 +26,10 @@ import logging      # Logging facilities
 
 logger = logging.getLogger('server.dab')
 
-# streams.ini config file wrapper class
 class StreamsConfig():
+    """
+    streams.ini config file wrapper class
+    """
     def __init__(self):
         self._cfgfile = None
         self._oldcfg = None

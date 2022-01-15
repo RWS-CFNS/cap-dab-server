@@ -19,8 +19,6 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-# TODO clean-up this code, it is quite messy right now
-
 import configparser                 # Python INI file parser
 import datetime                     # To get the current date and time
 import logging                      # Logging facilities
@@ -37,6 +35,11 @@ logger = logging.getLogger('server.dab')
 # DAB queue watcher and message processing
 # This thread handles messages received from the CAPServer
 class DABWatcher(threading.Thread):
+    TTS_MESSAGES = {
+        'nl-NL': ('Bericht {num}', 'Einde bericht {num}', 'Er volgt nu een herhaling'),
+        'en-US': ('Message {num}', 'End of message {num}', 'Messages will now be replayed')
+    }
+
     def __init__(self, config, q, zmqsock, streams, muxcfg):
         threading.Thread.__init__(self)
 
@@ -48,17 +51,68 @@ class DABWatcher(threading.Thread):
 
         self.alarm = config['warning'].getboolean('alarm')
         self.replace = config['warning'].getboolean('replace')
+        self.data = config['warning'].getboolean('data')
         self.alarmpath = f'{config["general"]["logdir"]}/streams/sub-alarm'
 
         self.tts = pyttsx3.init()
 
+        self._announcements = []
+
         self._running = True
 
+    def _broadcast_tts(self, tts_str, language):
+        mp3 = f'{self.alarmpath}/tts.mp3'
+
+        # Look for a voice with the right language
+        voice = next((v for v in self.tts.getProperty('voices') if v.languages[0] == language), None)
+        if voice is None:
+            logger.error(f'Aborting TTS broadcast, {language} is not supported by the TTS backend.')
+            return
+
+        # Generate TTS output from the description
+        self.tts.setProperty('voice', voice.id)
+        self.tts.save_to_file(tts_str, mp3)
+        self.tts.runAndWait()
+
+        # Convert the mp3 output to wav, the format supported by odr-audioenc
+        # This process also duplicates the mono channel to stereo, bitrate 48000 Hz and s16
+        ffmpeg = subproc.Popen(('ffmpeg',
+                                '-y',
+                                '-i', mp3,
+                                '-acodec', 'pcm_s16le',
+                                '-ar', '48000',
+                                '-ac', '2',
+                                f'{self.alarmpath}/tts.wav'), stdout=subproc.DEVNULL, stderr=subproc.DEVNULL)
+        try:
+            if ffmpeg.wait(timeout=20) != 0:
+                logger.error('Aborting TTS broadcast, ffmpeg failed')
+                return
+        except subproc.TimeoutExpired as e:
+            logger.error('Aborting TTS broadcast, ffmpeg timed out, please report this to the developer')
+            return
+
+        # Signal the alarm announcement if enabled in settings
+        if self.alarm:
+            out = utils.mux_send(self.zmqsock, ('set', self.config['warning']['announcement'], 'active', '1'))
+            logger.info(f'Activating alarm announcement, res: {out}')
+
+        # Perform stream replacement if enabled in settings
+        if self.replace:
+            try:
+                utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, True)
+            except Exception as e:
+                logger.error(f'Failed to perform stream replacement: {e}')
+            else:
+                logger.info('Replaced streams with alarm stream successfully')
+
     def run(self):
-        # Main a list of currently active announcements with their expiry date
+        # Maintain a list of currently active announcements
         announcements = []
 
-        # Flag that keeps track of whether the TTS message should be updated
+        # Maintain a list of future announcements
+        future_announcements = []
+
+        # Flag that maintains whether the announcement list has been updated or not
         changed = False
 
         # Insert silence into TTS depending on the backend that's used by pyttsx3
@@ -81,35 +135,61 @@ class DABWatcher(threading.Thread):
 
         while self._running:
             try:
-                # Check if there's any expired announcements to be cancelled
-                for ann in announcements:
-                    # Expires shouldn't be None, as the parser already check it
-                    if ann['expires'] is None:
+                for a in announcements:
+                    # Check if there's any expired announcements to be cancelled
+                    if a['expires'] is None:
+                        # Expires shouldn't be None, as the parser already check it
                         # In case it does, remove the announcement from the queue
-                        logger.error(f'invalid <expires> timestamp format: {ann["expires"]}')
-                        announcements.remove(ann)
-                    elif ann['expires'] < datetime.datetime.now(ann['expires'].tzinfo):
-                        logger.info(f'Cancelled CAP message: {ann["identifier"]}')
-                        announcements.remove(ann)
+                        logger.error(f'invalid <expires> timestamp format: {a["expires"]}')
+                        announcements.remove(a)
+                        changed = True
+                    elif a['expires'] < datetime.datetime.now(a['expires'].tzinfo):
+                        logger.info(f'Cancelled CAP message: {a["identifier"]}')
+                        announcements.remove(a)
+                        changed = True
 
-                # Wait for a message from the CAPServer
+                    # Write messages to data streams every second (if announcement is activated)
+                    if self.data:
+                        for s, t, c, o in self.streams.streams:
+                            if c['output_type'] == 'data':
+                                # TODO
+                                pass
+
+                # Check if there's any future announcements to be activated
+                for i, a in enumerate(future_announcements):
+                    if a['effective'] <= datetime.datetime.now(a['effective'].tzinfo):
+                        announcements.append(future_announcements.pop(i))
+                        changed = True
+
+                # Wait for a new CAP message from the CAPServer
                 a = self.q.get(block=True, timeout=1)
 
                 # Handle the current message
                 if a['msg_type'] == CAPParser.TYPE_ALERT:
                     logger.info(f'New CAP message: {a["identifier"]}')
-                    announcements.append(a)
+
+                    if a['effective'] <= datetime.datetime.now(a['effective'].tzinfo):
+                        announcements.append(a)
+                    else:
+                        future_announcements.append(a)
                 elif a['msg_type'] == CAPParser.TYPE_CANCEL:
                     cancelled = False
 
                     # Remove cancelled messages from the list
                     for ref in a['references']:
-                        for ann in announcements:
-                            if ref['sender']     == ann['sender'] and \
-                               ref['identifier'] == ann['identifier'] and \
-                               ref['sent']       == ann['sent']:
+                        for _a in announcements:
+                            if ref['sender']     == _a['sender'] and \
+                               ref['identifier'] == _a['identifier'] and \
+                               ref['sent']       == _a['sent']:
                                 logger.info(f'Cancelled CAP message: {ref["identifier"]}')
-                                announcements.remove(ann)
+                                announcements.remove(_a)
+                                cancelled = True
+                        for _a in future_announcements:
+                            if ref['sender']     == _a['sender'] and \
+                               ref['identifier'] == _a['identifier'] and \
+                               ref['sent']       == _a['sent']:
+                                logger.info(f'Cancelled CAP message: {ref["identifier"]}')
+                                future_announcements.remove(_a)
                                 cancelled = True
 
                     # Prevent restarting the stream(s) if no message was cancelled
@@ -119,13 +199,17 @@ class DABWatcher(threading.Thread):
                         self.q.task_done()
                         continue
 
-                # Generate new TTS message
-                num = len(announcements)
-                tts_str = ''
+                changed = True
+            except queue.Empty:
+                if not changed:
+                    continue
 
-                if num == 0:
-                    # Stop the alarm announcement and switch services back to their original streams
-                    for s, t, c, o in self.streams.streams:
+            changed = False
+
+            if len(announcements) == 0:
+                # Stop the alarm announcement and switch services back to their original streams
+                for s, t, c, o in self.streams.streams:
+                    if c['output_type'] != 'data':
                         if self.alarm:
                             out = utils.mux_send(self.zmqsock, ('set', 'alarm', 'active', '0'))
                             logger.info(f'Alarm announcement deactivated, res: {out}')
@@ -133,73 +217,53 @@ class DABWatcher(threading.Thread):
                         if self.replace:
                             try:
                                 utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, False)
-                                logger.info('Original streams restored successfully')
+                                logger.info('Original audio streams restored successfully')
                             except Exception as e:
-                                logger.error(f'Failed to restore original stream: {e}')
+                                logger.error(f'Failed to restore original audio stream: {e}')
+                    elif self.data:
+                        # TODO
+                        pass
+            elif self.alarm or self.replace:
+                # Check if there's audio (alarm announcement and stream replacement) streams to be processed
+                audiostreams = 0
+                for s, t, c, o in self.streams.streams:
+                    if c['output_type'] != 'data':
+                        audiostreams += 1
 
-                    self.q.task_done()
-                    continue
-                elif num == 1:
-                    tts_str += f'{_slnc(2000)} {announcements[0]["description"]}. {_slnc(500)} Einde bericht. {_slnc(2000)} Herhaling'
-                else:
-                    # In the case there's multiple messages in the queue:
-                    # Combine them into a single string with start and end markers.
-                    for i, ann in enumerate(announcements):
-                        # TODO handle other languages
-                        tts_str += f'{_slnc(2000)} Bericht {i + 1}. {_slnc(1000)} {a["description"]}. {_slnc(500)} Einde bericht {i + 1}.'
-                    tts_str += f'{_slnc(2000)} Herhaling'
+                # Start audio stream announcements
+                if audiostreams > 0:
+                    logger.info(f'Preparing TTS message...')
+                    # Generate the TTS input
+                    tts_str = ''
+                    lang = announcements[0]['lang']
 
-                # Generate TTS output from the description
-                mp3 = f'{self.alarmpath}/tts.mp3'
-                # TODO look for the right language
-                self.tts.setProperty('voice', 'com.apple.speech.synthesis.voice.xander')
-                self.tts.save_to_file(tts_str, mp3)
-                self.tts.runAndWait()
+                    # TODO handle other languages like german and such
+                    # FIXME english is broken
+                    if lang != 'nl-NL':
+                        lang = 'en-US'
 
-                # Convert the mp3 output to wav, the format supported by odr-audioenc
-                # This process also duplicates the mono channel to stereo, bitrate 48000 Hz and s16
-                # FIXME handle conditions where the conversion fails
-                # TODO output log somewhere
-                ffmpeg = subproc.Popen(('ffmpeg',
-                                        '-y',
-                                        '-i', mp3,
-                                        '-acodec', 'pcm_s16le',
-                                        '-ar', '48000',
-                                        '-ac', '2',
-                                        f'{self.alarmpath}/tts.wav'), stdout=subproc.DEVNULL, stderr=subproc.DEVNULL)
-                try:
-                    ffmpeg_res = ffmpeg.wait(timeout=20)
-                except subproc.TimeoutExpired as e:
-                    logger.error('ffmpeg took too long')
-                    # TODO handle and log
+                    if len(announcements) == 1:
+                        tts_str += f'{_slnc(2000)} {announcements[0]["description"]}. {_slnc(500)}'
+                        tts_str += self.TTS_MESSAGES[lang][1].format(num='')
+                    else:
+                        # In the case there's multiple messages in the queue:
+                        # Combine them into a single string with start and end markers.
+                        for i, a in enumerate(announcements):
+                            #lang = a['lang'] # FIXME mixed languages
+                            tts_str += '{s1} {opening}. {s2} {msg}. {s3} {closing}. '.format(
+                                        s1      = _slnc(2000),
+                                        opening = self.TTS_MESSAGES[lang][0].format(num=i + 1),
+                                        s2      = _slnc(1000),
+                                        msg     = a['description'],
+                                        s3      = _slnc(500),
+                                        closing = self.TTS_MESSAGES[lang][1].format(num=i + 1)
+                                       )
+                    tts_str += _slnc(2000) + self.TTS_MESSAGES[lang][2]
 
-                    self.q.task_done()
-                    continue
+                    # Broadcast our message on all channels with alarm announcement enabled
+                    self._broadcast_tts(tts_str, lang.replace('-', '_'))
 
-                if ffmpeg_res != 0:
-                    logger.error('ffmpeg failed')
-                    # TODO handle and log
-
-                    self.q.task_done()
-                    continue
-
-                # Signal the alarm announcement if enabled in settings
-                if self.alarm:
-                    # TODO start later if effective is later than current time
-                    out = utils.mux_send(self.zmqsock, ('set', self.config['warning']['alarm'], 'active', '1'))
-                    logger.info(f'Activating alarm announcement, res: {out}')
-
-                # Perform stream replacement if enabled in settings
-                if self.replace:
-                    try:
-                        utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, True)
-                        logger.info('Replaced streams with alarm stream successfully')
-                    except Exception as e:
-                        logger.error(f'Failed to perform stream replacement: {e}')
-
-                self.q.task_done()
-            except queue.Empty:
-                pass
+            self.q.task_done()
 
     def join(self):
         if not self.is_alive():

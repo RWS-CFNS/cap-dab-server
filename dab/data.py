@@ -212,7 +212,7 @@ class DABDataStream(multiprocessing.Process):
                 with open(self.output, 'wb') as outfifo:
                     # Read in blocks to prevent having to load all file contents into memory
                     while self._running:
-                        indata = infile.read(BUFFER_SIZE)
+                        indata = infile.read(self.BUFFER_SIZE)
 
                         if len(indata) == 0:
                             # EOF
@@ -226,9 +226,6 @@ class DABDataStream(multiprocessing.Process):
                         # Write our packets to odr-dabmux
                         outfifo.write(packets)
                         outfifo.flush()
-
-            #logger.warning(f'Failed to read from file {self.input} for data stream {self.name}. Retrying in 2 sec.')
-            time.sleep(2)
 
     def join(self, timeout=3):
         if not self.is_alive():

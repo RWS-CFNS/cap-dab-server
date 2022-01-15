@@ -150,7 +150,7 @@ def replace_streams(zmqsock, config, muxcfg, streams, alarm_on):
                         cfg['input_type'] = 'file'
                         cfg['input'] = '../sub-alarm/tts.wav'
 
-                        cfg['dls_enable'] = 'yes'
+                        cfg['dls_enable'] = 'no'
                         cfg['mot_enable'] = 'no'
 
                         # Perform stream replacement on the corresponding subchannel/stream
@@ -160,4 +160,4 @@ def replace_streams(zmqsock, config, muxcfg, streams, alarm_on):
                         streams.setcfg(s)
 
             if found == False:
-                raise Exception(f'Subchannel "{subchannel}" was not found in streams.ini!')
+                raise Exception(f'Misconfiguration: stream "{subchannel}" was not found in streams.ini!')

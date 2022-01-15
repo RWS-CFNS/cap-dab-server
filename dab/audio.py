@@ -54,7 +54,7 @@ class DABAudioStream(threading.Thread):
 
     def run(self):
         # If DLS and MOT are disabled, we won't need to start odr-padenc
-        pad_enable = self.streamcfg.getboolean('dls_enable') and self.streamcfg.getboolean('mot_enable')
+        pad_enable = self.streamcfg.getboolean('dls_enable') or self.streamcfg.getboolean('mot_enable')
 
         # Save our logs (FIXME rotate logs)
         audiolog = open(f'{self.streamdir}/logs/audioenc.log', 'ab')
@@ -69,9 +69,10 @@ class DABAudioStream(threading.Thread):
                                 f'--bitrate={self.streamcfg["bitrate"]}',
                                  '-D',
                                 f'--output=ipc://{self.output}',
-                                f'--pad-socket={self.name}',
-                                f'--pad={self.streamcfg["pad_length"]}'
                             ]
+            if pad_enable:
+                audioenc_cmdline.append(f'--pad-socket={self.name}')
+                audioenc_cmdline.append(f'--pad={self.streamcfg["pad_length"]}')
 
             # Set the DAB type
             if self.streamcfg['output_type'] == 'dab':
@@ -127,6 +128,7 @@ class DABAudioStream(threading.Thread):
                 time.sleep(2)
 
             # Maintain a failcounter to automatically exit the loop if we are unable to bring the stream up
+            # FIXME don't do this for alarm announcements
             failcounter += 1
 
         if self._running:
