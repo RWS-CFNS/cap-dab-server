@@ -1,6 +1,7 @@
 cap-dab-server is a piece of software that combines existing DAB broadcasting
-utilities (from ODR-mmbTools) into a solution capable of translating CAP (Common
-Alerting Protocol) messages to a DAB/DAB+ emergency warning broadcast.
+utilities (from ODR-mmbTools) with a friendly user-interface into a solution
+capable of translating CAP (Common Alerting Protocol) messages to a DAB/DAB+
+emergency warning broadcast.
 
 ![Main menu](main_menu.png)
 
@@ -76,7 +77,7 @@ multiplexer such as GNU Screen and detaching from the session.
 A DAB in cap-dab-server ensemble consists of services and streams. A DAB
 ensemble is broken down into one or more services. Services provide _one_
 stream, which can be i.e. a HTTP audio stream, a named pipe with arbitrary data
-or single (looped) audio file.\\
+or single (looped) audio file.  
 A stream consists of one or more service components, which refer to for instance
 an audio stream and a data stream. cap-dab-server limits
 
@@ -98,22 +99,22 @@ configured, but services and stream have to be added manually before you can
 begin broadcasting.
 
 Let's add a stream first. From the main menu, go to `DAB` > `Streams` > `Add`.
-Enter a simple identifier for the stream such as `sub-audio`.\\
+Enter a simple identifier for the stream such as `sub-audio`.  
 Now, set the stream source by selecting `Stream Input`. Let's make this a DAB+
 stream. Navigate to `DAB+` with the arrow keys and press `Spacebar` to select.
-`Return` will move to the next screen.\\
+`Return` will move to the next screen.  
 Select the input source type, choose GStreamer to use a HTTP webstream for
-example.\\
+example.  
 In the next screen, enter the path (for File and FIFO) or the GSTURI (for
 GStreamer). In our example, we'll use a local VLC instance streaming a playlist
-on 127.0.0.1:1234. Enter `http://127.0.0.1:1234` and press `Return`.\\
+on 127.0.0.1:1234. Enter `http://127.0.0.1:1234` and press `Return`.  
 The remaining options can be modified later, but the defaults are relatively
-sane.
-\\
-\\
+sane.  
+  
+  
 Let's add a new service now. Navigate back to `DAB Configuration` and go to
 `Services` > `Add`. Enter a identifier such as `srv-audio`. For the service ID,
-use any value, such as `dab`. Now, select the stream we've just created.\\
+use any value, such as `dab`. Now, select the stream we've just created.  
 From here, you can optionally configure any other service parameters.
 
 When navigating back to `DAB Configuration`, make sure to press `Save` to save
