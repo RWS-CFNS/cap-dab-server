@@ -209,7 +209,7 @@ class DABDataStream(multiprocessing.Process):
     def run(self):
         while self._running:
             with open(self.input, 'rb') as infile:
-                with open('/tmp/dabout', 'wb') as outfifo:
+                with open(self.output, 'wb') as outfifo:
                     # Read in blocks to prevent having to load all file contents into memory
                     while self._running:
                         indata = infile.read(self.BUFFER_SIZE)
