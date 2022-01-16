@@ -125,8 +125,9 @@ def replace_streams(zmqsock, config, muxcfg, streams, input_type=None, inputuri=
             shortlabel = str(service['shortlabel'])
             pty = str(service['pty'])
 
-        out = mux_send(zmqsock, ('set', sname, 'label', f'{label},{shortlabel}'))
-        out = mux_send(zmqsock, ('set', sname, 'pty', pty))
+        mux_send(zmqsock, ('set', sname, 'label', f'{label},{shortlabel}'))
+        if pty != '':
+            mux_send(zmqsock, ('set', sname, 'pty', pty))
 
         # Get the streams corresponding to this service
         for _, component in muxcfg.components:

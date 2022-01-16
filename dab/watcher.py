@@ -247,12 +247,17 @@ class DABWatcher(threading.Thread):
                         if self.replace:
                             try:
                                 utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams)
-                                logger.info('Original audio streams restored successfully')
                             except Exception as e:
-                                logger.error(f'Failed to restore original audio stream: {e}')
+                                logger.error(f'Failed to restore original audio streams: {e}')
+                            else:
+                                logger.info('Original audio streams restored successfully')
                     elif self.data:
-                        utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, None, None, data_streams=True)
-                        logger.info('Original data streams restored successfully')
+                        try:
+                            utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, None, None, data_streams=True)
+                        except Exception as e:
+                            logger.error(f'Failed to restore original data streams: {e}')
+                        else:
+                            logger.info('Original data streams restored successfully')
             elif self.alarm or self.replace:
                 # Check if there's audio (alarm announcement and stream replacement) streams to be processed
                 # FIXME do pythonic way, this is lazy
