@@ -158,11 +158,14 @@ class DABWatcher(threading.Thread):
                         changed = True
 
                 # Write all announcements to all data streams every second (if announcement is activated)
+                # TODO think of another way of doing this
+                #      perhaps less often, of only interrupting the regular data stream every minute or so
+                #      Or move the entire stream replacement code to the DABData/AudioStream classes
                 if self.data:
                     for s, t, c, o in self.streams.streams:
                         if c['output_type'] == 'data':
-                            with open(self.datafifo, 'wb') as outfifo:
-                                for a in [*announcements, *future_announcements]:
+                            for a in [*announcements, *future_announcements]:
+                                with open(self.datafifo, 'wb') as outfifo:
                                     # FIXME this is dangerous because it blocks
                                     outfifo.write(a['raw'])
                                     outfifo.flush()
