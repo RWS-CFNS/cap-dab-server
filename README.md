@@ -179,6 +179,8 @@ TODO
 
 # Known issues
 - DAB data streams don't properly shut down because read blocks the stream thread
+- English (en-US) TTS output doesn't generate correctly on macOS, consider using
+  another TTS library than pyttsx3
 
 # License
 This project is licensed under the GNU General Public License v3.0. See

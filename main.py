@@ -107,10 +107,10 @@ os.makedirs(os.path.dirname(config['dab']['mod_config']), exist_ok=True)
 
 # Setup a general server logger
 logger = logging.getLogger('server')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 handler = logging.handlers.RotatingFileHandler(f'{config["general"]["logdir"]}/server.log', mode='a', maxBytes=int(config['general']['max_log_size'])*1024, backupCount=5)
 handler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%y-%m-%d %H:%M:%s'))
-handler.setLevel(logging.DEBUG)
+handler.setLevel(logging.INFO)
 logger.addHandler(handler)
 
 d = Dialog(dialog='dialog', autowidgetsize=True)

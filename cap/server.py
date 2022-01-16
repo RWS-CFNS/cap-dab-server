@@ -102,10 +102,10 @@ class CAPServer():
             return flask.Response(status=400)
 
         if cp.msg_type == CAPParser.TYPE_LINK_TEST:
-            logger.info(f'{client_addr}: Link Test OK')
+            logger.debug(f'{client_addr}: Link Test OK')
             pass
         elif cp.msg_type == CAPParser.TYPE_ALERT:
-            logger.info(f'{client_addr}: Alert OK')
+            logger.debug(f'{client_addr}: Alert OK')
             try:
                 self._q.put({
                             'msg_type': cp.msg_type,
@@ -120,7 +120,7 @@ class CAPServer():
             except queue.Full:
                 logger.error('Queue is full, perhaps increase queuelimit?')
         elif cp.msg_type == CAPParser.TYPE_CANCEL:
-            logger.info(f'{client_addr}: Alert Cancel OK')
+            logger.debug(f'{client_addr}: Alert Cancel OK')
 
             try:
                 self._q.put({

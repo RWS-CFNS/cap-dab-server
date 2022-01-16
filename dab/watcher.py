@@ -118,7 +118,6 @@ class DABWatcher(threading.Thread):
         # Insert silence into TTS depending on the backend that's used by pyttsx3
         def _slnc(ms):
             backend = self.tts.proxy._module.__name__
-
             # SAPI5 on Windows
             # NSSS on macOS
             # espeak on Linux and other platforms
@@ -144,7 +143,7 @@ class DABWatcher(threading.Thread):
                         announcements.remove(a)
                         changed = True
                     elif a['expires'] < datetime.datetime.now(a['expires'].tzinfo):
-                        logger.info(f'Cancelled CAP message: {a["identifier"]}')
+                        logger.info(f'Expired CAP message: {a["identifier"]}')
                         announcements.remove(a)
                         changed = True
 
@@ -158,6 +157,7 @@ class DABWatcher(threading.Thread):
                 # Check if there's any future announcements to be activated
                 for i, a in enumerate(future_announcements):
                     if a['effective'] <= datetime.datetime.now(a['effective'].tzinfo):
+                        logger.info(f'Activating queued CAP message: {a["identifier"]}')
                         announcements.append(future_announcements.pop(i))
                         changed = True
 
@@ -166,12 +166,23 @@ class DABWatcher(threading.Thread):
 
                 # Handle the current message
                 if a['msg_type'] == CAPParser.TYPE_ALERT:
-                    logger.info(f'New CAP message: {a["identifier"]}')
+                    # Skip this message if the expiry time is before the current time
+                    if a['expires'] <= datetime.datetime.now(a['expires'].tzinfo):
+                        logger.warn(f'Ignoring CAP message: {a["identifier"]}, expiration date has passed')
 
+                        self.q.task_done()
+                        continue
+
+                    # FIXME handle daylight savings properly
                     if a['effective'] <= datetime.datetime.now(a['effective'].tzinfo):
+                        logger.info(f'New CAP message: {a["identifier"]}')
                         announcements.append(a)
                     else:
+                        logger.info(f'New future CAP message: {a["identifier"]} for {a["effective"]}')
                         future_announcements.append(a)
+
+                        self.q.task_done()
+                        continue
                 elif a['msg_type'] == CAPParser.TYPE_CANCEL:
                     cancelled = False
 
@@ -200,10 +211,13 @@ class DABWatcher(threading.Thread):
                         continue
 
                 changed = True
+                self.q.task_done()
             except queue.Empty:
                 if not changed:
                     continue
 
+            if not self._running:
+                break
             changed = False
 
             if len(announcements) == 0:
@@ -238,7 +252,7 @@ class DABWatcher(threading.Thread):
                     lang = announcements[0]['lang']
 
                     # TODO handle other languages like german and such
-                    # FIXME english is broken
+                    # FIXME english is broken on macOS, cuts off halfway
                     if lang != 'nl-NL':
                         lang = 'en-US'
 
@@ -262,8 +276,6 @@ class DABWatcher(threading.Thread):
 
                     # Broadcast our message on all channels with alarm announcement enabled
                     self._broadcast_tts(tts_str, lang.replace('-', '_'))
-
-            self.q.task_done()
 
     def join(self):
         if not self.is_alive():

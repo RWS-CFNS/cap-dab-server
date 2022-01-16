@@ -127,9 +127,10 @@ class DABAudioStream(threading.Thread):
             if self._running:
                 time.sleep(2)
 
-            # Maintain a failcounter to automatically exit the loop if we are unable to bring the stream up
-            # FIXME don't do this for alarm announcements
-            failcounter += 1
+            # Maintain a failcounter to automatically exit the loop if odr-audioenc terminated with an error
+            # TODO check padenc too?
+            if self._running and self.audio.wait(timeout=None) != 0:
+                failcounter += 1
 
         if self._running:
             logger.error(f'Terminating DAB audio stream "{self.name}". odr-audioenc failed to start {failcounter} times')
