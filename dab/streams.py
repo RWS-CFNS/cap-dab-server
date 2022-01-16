@@ -149,9 +149,6 @@ class DABStreams():
             return
 
         for s, t, c, o in self.streams:
-            if o is not None:
-                utils.remove_fifo(o)
-
             if t is not None:
                 t.join()
 
@@ -162,6 +159,9 @@ class DABStreams():
                     # A last resort
                     if t.is_alive():
                         t.kill()
+
+            if o is not None:
+                utils.remove_fifo(o)
 
         self.streams = []
 
