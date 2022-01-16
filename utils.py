@@ -100,7 +100,11 @@ def mux_send(sock, msgs):
 
     return res
 
-def replace_streams(zmqsock, config, muxcfg, streams, alarm_on):
+# FIXME the way this function is integrated in the application is not very elegant
+#       it works, but it's ugly
+def replace_streams(zmqsock, config, muxcfg, streams, input_type=None, inputuri=None, data_streams=False):
+    alarm_on = input_type is not None or inputuri is not None
+
     for sname, service in muxcfg.services:
         # Check if this service supports alarm announcements
         # TODO also support Warning announcement
@@ -129,9 +133,15 @@ def replace_streams(zmqsock, config, muxcfg, streams, alarm_on):
             if str(component.service) != sname:
                 continue
 
-            # Skip non-audio components
-            if int(str(component.type)) not in (0, 1, 2):
-                continue
+            component_type = int(str(component.type))
+            if not data_streams:
+                # Skip non-audio components
+                if component_type not in (0, 1, 2):
+                    continue
+            else:
+                # Only packet data comonents
+                if component_type != 59:
+                    continue
 
             # Check if this name exists in the config too
             subchannel = str(component.subchannel)
@@ -147,8 +157,8 @@ def replace_streams(zmqsock, config, muxcfg, streams, alarm_on):
                         # Create a copy of the stream's config
                         cfg = copy.deepcopy(c)
 
-                        cfg['input_type'] = 'file'
-                        cfg['input'] = '../sub-alarm/tts.wav'
+                        cfg['input_type'] = input_type
+                        cfg['input'] = inputuri
 
                         cfg['dls_enable'] = 'no'
                         cfg['mot_enable'] = 'no'

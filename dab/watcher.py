@@ -35,11 +35,11 @@ logger = logging.getLogger('server.dab')
 # DAB queue watcher and message processing
 # This thread handles messages received from the CAPServer
 class DABWatcher(threading.Thread):
-    # TODO handle other languages like german and such
+    # TODO support more languages
     TTS_MESSAGES = {
-        'en-US': ('Message {num}', 'End of message {num}', 'Messages will now be repeated'),
-        'de-DE': ('Meldung {num}', 'Ende der Meldung {num}', 'Die Meldungen werden nun wiederholt'),
-        'nl-NL': ('Melding {num}', 'Einde melding {num}', 'Er volgt nu een herhaling van de meldingen')
+        'en-US': ('Message {num}', 'End of message {num}', 'A replay will now follow'),
+        'de-DE': ('Meldung {num}', 'Ende der Meldung {num}', 'Es folgt nun eine Wiederholung'),
+        'nl-NL': ('Bericht {num}', 'Einde bericht {num}', 'Er volgt nu een herhaling')
     }
 
     def __init__(self, config, q, zmqsock, streams, muxcfg):
@@ -56,6 +56,11 @@ class DABWatcher(threading.Thread):
         self.data = config['warning'].getboolean('data')
         self.alarmpath = f'{config["general"]["logdir"]}/streams/sub-alarm'
 
+        # Create a fifo for data stream broadcasting
+        # TODO create a temporary file in /tmp instead?
+        #      this way of doing things is fine for debugging, but not for production
+        self.datafifo = f'{self.alarmpath}/data.fifo'
+
         self.tts = pyttsx3.init()
 
         self._announcements = []
@@ -63,7 +68,10 @@ class DABWatcher(threading.Thread):
         self._running = True
 
     def _broadcast_tts(self, tts_str, language):
+        # TODO create a temporary file in /tmp instead?
+        #      this way of doing things is fine for debugging, but not for production
         mp3 = f'{self.alarmpath}/tts.mp3'
+        wav = f'{self.alarmpath}/tts.wav'
 
         # Look for a voice with the right language
         voice = next((v for v in self.tts.getProperty('voices') if v.languages[0] == language), None)
@@ -84,7 +92,7 @@ class DABWatcher(threading.Thread):
                                 '-acodec', 'pcm_s16le',
                                 '-ar', '48000',
                                 '-ac', '2',
-                                f'{self.alarmpath}/tts.wav'), stdout=subproc.DEVNULL, stderr=subproc.DEVNULL)
+                                wav), stdout=subproc.DEVNULL, stderr=subproc.DEVNULL)
         try:
             if ffmpeg.wait(timeout=20) != 0:
                 logger.error('Aborting TTS broadcast, ffmpeg failed')
@@ -101,11 +109,11 @@ class DABWatcher(threading.Thread):
         # Perform stream replacement if enabled in settings
         if self.replace:
             try:
-                utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, True)
+                utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, 'file', wav)
             except Exception as e:
                 logger.error(f'Failed to perform stream replacement: {e}')
             else:
-                logger.info('Replaced streams with alarm stream successfully')
+                logger.info('Replaced audio streams with alarm stream successfully')
 
     def run(self):
         # Maintain a list of currently active announcements
@@ -136,8 +144,8 @@ class DABWatcher(threading.Thread):
 
         while self._running:
             try:
+                # Check if there's any expired announcements to be cancelled
                 for a in announcements:
-                    # Check if there's any expired announcements to be cancelled
                     if a['expires'] is None:
                         # Expires shouldn't be None, as the parser already check it
                         # In case it does, remove the announcement from the queue
@@ -149,12 +157,15 @@ class DABWatcher(threading.Thread):
                         announcements.remove(a)
                         changed = True
 
-                    # Write messages to data streams every second (if announcement is activated)
-                    if self.data:
-                        for s, t, c, o in self.streams.streams:
-                            if c['output_type'] == 'data':
-                                # TODO
-                                pass
+                # Write all announcements to all data streams every second (if announcement is activated)
+                if self.data:
+                    for s, t, c, o in self.streams.streams:
+                        if c['output_type'] == 'data':
+                            with open(self.datafifo, 'wb') as outfifo:
+                                for a in [*announcements, *future_announcements]:
+                                    # FIXME this is dangerous because it blocks
+                                    outfifo.write(a['raw'])
+                                    outfifo.flush()
 
                 # Check if there's any future announcements to be activated
                 for i, a in enumerate(future_announcements):
@@ -232,19 +243,31 @@ class DABWatcher(threading.Thread):
 
                         if self.replace:
                             try:
-                                utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, False)
+                                utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams)
                                 logger.info('Original audio streams restored successfully')
                             except Exception as e:
                                 logger.error(f'Failed to restore original audio stream: {e}')
                     elif self.data:
-                        # TODO
-                        pass
+                        utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, None, None, data_streams=True)
+                        logger.info('Original data streams restored successfully')
             elif self.alarm or self.replace:
                 # Check if there's audio (alarm announcement and stream replacement) streams to be processed
-                audiostreams = 0
+                # FIXME do pythonic way, this is lazy
+                audiostreams = datastreams = 0
                 for s, t, c, o in self.streams.streams:
                     if c['output_type'] != 'data':
                         audiostreams += 1
+                    else:
+                        datastreams += 1
+
+                # Replace data streams with a custom stream of warnings
+                if datastreams > 0:
+                    try:
+                        utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, 'fifo', self.datafifo, True)
+                    except Exception as e:
+                        logger.error(f'Failed to perform stream replacement: {e}')
+                    else:
+                        logger.info('Replaced data streams with alarm stream successfully')
 
                 # Start audio stream announcements
                 if audiostreams > 0:
@@ -254,7 +277,7 @@ class DABWatcher(threading.Thread):
                     lang = announcements[0]['lang']
 
                     # FIXME english is broken on macOS, cuts off halfway
-                    if lang not in TTS_MESSAGES.keys():
+                    if lang not in self.TTS_MESSAGES.keys():
                         lang = 'en-US'
 
                     if len(announcements) == 1:

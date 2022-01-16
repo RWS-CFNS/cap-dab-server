@@ -108,6 +108,7 @@ class CAPServer():
             logger.debug(f'{client_addr}: Alert OK')
             try:
                 self._q.put({
+                            'raw': flask.request.data,
                             'msg_type': cp.msg_type,
                             'identifier': cp.identifier,
                             'sender': cp.sender,
@@ -124,6 +125,7 @@ class CAPServer():
 
             try:
                 self._q.put({
+                            'raw': flask.request.data,
                             'msg_type': cp.msg_type,
                             'identifier': cp.identifier,
                             'sender': cp.sender,

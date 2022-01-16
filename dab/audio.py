@@ -82,11 +82,11 @@ class DABAudioStream(threading.Thread):
             if self.streamcfg['input_type'] == 'gst':
                 audioenc_cmdline.append(f'--gst-uri={self.streamcfg["input"]}')
             elif self.streamcfg['input_type'] == 'fifo':
-                audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
+                audioenc_cmdline.append(f'--input={self.streamcfg["input"]}')
                 audioenc_cmdline.append('--format=raw')
                 audioenc_cmdline.append('--fifo-silence')
             elif self.streamcfg['input_type'] == 'file':
-                audioenc_cmdline.append(f'--input={self.streamdir}/{self.streamcfg["input"]}')
+                audioenc_cmdline.append(f'--input={self.streamcfg["input"]}')
                 audioenc_cmdline.append('--format=wav')
 
             self.audio = subproc.Popen(audioenc_cmdline, stdout=audiolog, stderr=audiolog)

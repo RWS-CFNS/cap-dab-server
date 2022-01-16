@@ -114,8 +114,8 @@ class DABStreams():
         for s, t, c, o in self.streams:
             # Get the current stream
             if s == stream and c is not None:
-                # Check if this stream is an audio stream
-                if c['output_type'] == 'data':
+                # Don't continue if we're already running with the provided config
+                if newcfg == c:
                     return
 
                 # Restore to the original stream
