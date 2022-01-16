@@ -35,9 +35,11 @@ logger = logging.getLogger('server.dab')
 # DAB queue watcher and message processing
 # This thread handles messages received from the CAPServer
 class DABWatcher(threading.Thread):
+    # TODO handle other languages like german and such
     TTS_MESSAGES = {
-        'nl-NL': ('Bericht {num}', 'Einde bericht {num}', 'Er volgt nu een herhaling'),
-        'en-US': ('Message {num}', 'End of message {num}', 'Messages will now be replayed')
+        'en-US': ('Message {num}', 'End of message {num}', 'Messages will now be repeated'),
+        'de-DE': ('Meldung {num}', 'Ende der Meldung {num}', 'Die Meldungen werden nun wiederholt'),
+        'nl-NL': ('Melding {num}', 'Einde melding {num}', 'Er volgt nu een herhaling van de meldingen')
     }
 
     def __init__(self, config, q, zmqsock, streams, muxcfg):
@@ -251,9 +253,8 @@ class DABWatcher(threading.Thread):
                     tts_str = ''
                     lang = announcements[0]['lang']
 
-                    # TODO handle other languages like german and such
                     # FIXME english is broken on macOS, cuts off halfway
-                    if lang != 'nl-NL':
+                    if lang not in TTS_MESSAGES.keys():
                         lang = 'en-US'
 
                     if len(announcements) == 1:
