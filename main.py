@@ -89,7 +89,7 @@ else:
     config['warning'] = {
                          'alarm': 'yes',
                          'replace': 'yes',
-                         'data': 'yes',
+                         'data': 'no',
                          'announcement': 'alarm',
                          'label': 'Alert',
                          'shortlabel': 'Alert',

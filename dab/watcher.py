@@ -143,40 +143,40 @@ class DABWatcher(threading.Thread):
                 return ''
 
         while self._running:
+            # Check if there's any expired announcements to be cancelled
+            for a in announcements:
+                if a['expires'] is None:
+                    # Expires shouldn't be None, as the parser already check it
+                    # In case it does, remove the announcement from the queue
+                    logger.error(f'invalid <expires> timestamp format: {a["expires"]}')
+                    announcements.remove(a)
+                    changed = True
+                elif a['expires'] < datetime.datetime.now(a['expires'].tzinfo):
+                    logger.info(f'Expired CAP message: {a["identifier"]}')
+                    announcements.remove(a)
+                    changed = True
+
+            # Write all announcements to all data streams every second (if announcement is activated)
+            # TODO think of another way of doing this
+            #      perhaps less often, of only interrupting the regular data stream every minute or so
+            #      Or move the entire stream replacement code to the DABData/AudioStream classes
+            if self.data:
+                for s, t, c, o in self.streams.streams:
+                    if c['output_type'] == 'data':
+                        for a in [*announcements, *future_announcements]:
+                            with open(self.datafifo, 'wb') as outfifo:
+                                # FIXME this is dangerous because it blocks
+                                outfifo.write(a['raw'])
+                                outfifo.flush()
+
+            # Check if there's any future announcements to be activated
+            for i, a in enumerate(future_announcements):
+                if a['effective'] <= datetime.datetime.now(a['effective'].tzinfo):
+                    logger.info(f'Activating queued CAP message: {a["identifier"]}')
+                    announcements.append(future_announcements.pop(i))
+                    changed = True
+
             try:
-                # Check if there's any expired announcements to be cancelled
-                for a in announcements:
-                    if a['expires'] is None:
-                        # Expires shouldn't be None, as the parser already check it
-                        # In case it does, remove the announcement from the queue
-                        logger.error(f'invalid <expires> timestamp format: {a["expires"]}')
-                        announcements.remove(a)
-                        changed = True
-                    elif a['expires'] < datetime.datetime.now(a['expires'].tzinfo):
-                        logger.info(f'Expired CAP message: {a["identifier"]}')
-                        announcements.remove(a)
-                        changed = True
-
-                # Write all announcements to all data streams every second (if announcement is activated)
-                # TODO think of another way of doing this
-                #      perhaps less often, of only interrupting the regular data stream every minute or so
-                #      Or move the entire stream replacement code to the DABData/AudioStream classes
-                if self.data:
-                    for s, t, c, o in self.streams.streams:
-                        if c['output_type'] == 'data':
-                            for a in [*announcements, *future_announcements]:
-                                with open(self.datafifo, 'wb') as outfifo:
-                                    # FIXME this is dangerous because it blocks
-                                    outfifo.write(a['raw'])
-                                    outfifo.flush()
-
-                # Check if there's any future announcements to be activated
-                for i, a in enumerate(future_announcements):
-                    if a['effective'] <= datetime.datetime.now(a['effective'].tzinfo):
-                        logger.info(f'Activating queued CAP message: {a["identifier"]}')
-                        announcements.append(future_announcements.pop(i))
-                        changed = True
-
                 # Wait for a new CAP message from the CAPServer
                 a = self.q.get(block=True, timeout=1)
 
@@ -264,7 +264,7 @@ class DABWatcher(threading.Thread):
                         datastreams += 1
 
                 # Replace data streams with a custom stream of warnings
-                if datastreams > 0:
+                if self.data and datastreams > 0:
                     try:
                         utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, 'fifo', self.datafifo, True)
                     except Exception as e:
