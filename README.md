@@ -163,8 +163,8 @@ TODO
 - [x] Manual announcement triggering
 - [ ] GUI config - Ensemble announcement
 - [x] GUI config - Service PTY and Announcement
-- [ ] GUI config - Subchannels
-- [ ] GUI config - Stream
+- [x] GUI config - Subchannels
+- [x] GUI config - Stream
 - [ ] GUI config - DAB modulator
 - [ ] GUI config - Packet address
 - [x] Settings - CAP identity
