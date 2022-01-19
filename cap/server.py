@@ -26,7 +26,6 @@ import pyexpat                              # CAP XML parser backend (only used 
 import queue                                # Queue for passing data to the DAB processing thread
 import re                                   # For removing color from werkzeug's log messages
 import threading                            # Threading support (for running Flask in the background)
-import os                                   # For redirecting Flask's logging output to a file using an env. variable
 from werkzeug.serving import make_server    # Flask backend
 from cap.parser import CAPParser            # CAP XML parser (internal)
 import utils
@@ -86,7 +85,7 @@ class CAPServer():
         content_type = flask.request.content_type
 
         if not content_type.startswith('application/xml') and not content_type.startswith('text/xml'):
-            if utils.logger_strict(logger, f'{"FAIL" if strict else "WARN"}: invalid Content-Type: {content_type}'):
+            if utils.logger_strict(logger, self._strict, f'{"FAIL" if self._strict else "WARN"}: invalid Content-Type: {content_type}'):
                 return flask.Response(status=415)
 
         # Initialize the CAP parser

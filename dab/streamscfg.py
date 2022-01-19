@@ -35,7 +35,7 @@ class StreamsConfig():
         self._oldcfg = None
         self.cfg = configparser.ConfigParser()
 
-    def load(self, cfgfile):
+    def load(self, cfgfile: str):
         if cfgfile is None:
             return False
 

@@ -30,7 +30,7 @@ import zmq      # For signalling (alarm) announcements to ODR-DabMux
 # Return bool:
 # - True if strict parsing is enabled
 # - False if strict parsing is disabled
-def logger_strict(logger, msg):
+def logger_strict(logger, strict: bool, msg: str):
     if strict:
         logger.error(msg)
         return True
@@ -149,7 +149,7 @@ def replace_streams(zmqsock, config, muxcfg, streams, input_type=None, inputuri=
             found = False
 
             # TODO can this be done prettier?
-            for s, t, c, o in streams.streams:
+            for s, _, c, _ in streams.streams:
                 if s == subchannel:
                     found = True
 

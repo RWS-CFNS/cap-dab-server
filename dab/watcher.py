@@ -19,10 +19,8 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-import configparser                 # Python INI file parser
 import datetime                     # To get the current date and time
 import logging                      # Logging facilities
-import os                           # For file I/O
 import pyttsx3                      # Text To Speech engine frontend
 import queue                        # Queue for passing data to the DAB processing thread
 import subprocess as subproc        # For spawning ffmpeg to convert mp3 to wav
@@ -161,7 +159,7 @@ class DABWatcher(threading.Thread):
             #      perhaps less often, of only interrupting the regular data stream every minute or so
             #      Or move the entire stream replacement code to the DABData/AudioStream classes
             if self.data:
-                for s, t, c, o in self.streams.streams:
+                for _, _, c, _ in self.streams.streams:
                     if c['output_type'] == 'data':
                         for a in [*announcements, *future_announcements]:
                             with open(self.datafifo, 'wb') as outfifo:
@@ -238,7 +236,7 @@ class DABWatcher(threading.Thread):
 
             if len(announcements) == 0:
                 # Stop the alarm announcement and switch services back to their original streams
-                for s, t, c, o in self.streams.streams:
+                for _, _, c, _ in self.streams.streams:
                     if c['output_type'] != 'data':
                         if self.alarm:
                             out = utils.mux_send(self.zmqsock, ('set', 'alarm', 'active', '0'))
@@ -262,7 +260,7 @@ class DABWatcher(threading.Thread):
                 # Check if there's audio (alarm announcement and stream replacement) streams to be processed
                 # FIXME do pythonic way, this is lazy
                 audiostreams = datastreams = 0
-                for s, t, c, o in self.streams.streams:
+                for _, _, c, _ in self.streams.streams:
                     if c['output_type'] != 'data':
                         audiostreams += 1
                     else:

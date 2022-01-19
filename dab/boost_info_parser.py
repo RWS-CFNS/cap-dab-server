@@ -21,13 +21,13 @@ import copy
 import shlex
 
 class BoostInfoTree(object):
-    def __init__(self, value=None, parent=None):
+    def __init__(self, value=None, parent=None, lastchild=None):
         super(BoostInfoTree, self).__init__()
         self.subTrees = {}
         self.value = value
         self.parent = parent
 
-        self.lastChild = None
+        self.lastchild = lastchild
 
     def __copy__(self):
         out = self.__class__.__new__(self.__class__)
@@ -53,9 +53,9 @@ class BoostInfoTree(object):
         if key in self.subTrees:
             self.subTrees[key].value = value
         else:
-            self.lastChild = self.subTrees[key] = BoostInfoTree(value, self)
+            self.lastchild = self.subTrees[key] = BoostInfoTree(value, self)
     def __setattr__(self, key, value=None):
-        if key in ('subTrees', 'value', 'parent', 'lastChild'):
+        if key in ('subTrees', 'value', 'parent', 'lastchild'):
             return object.__setattr__(self, key, value)
         return self.__setitem__(key, value)
 
@@ -67,7 +67,7 @@ class BoostInfoTree(object):
 
         return self.subTrees[key]
     def __getattr__(self, key):
-        if key in ('subTrees', 'value', 'parent', 'lastChild'):
+        if key in ('subTrees', 'value', 'parent', 'lastchild'):
             return object.__getattr__(self, key)
         return self.__getitem__(key)
 
@@ -119,8 +119,7 @@ class BoostInfoParser(object):
         self._reset()
 
     def _reset(self):
-        self._root = BoostInfoTree()
-        self._root.lastChild = self
+        self._root = BoostInfoTree(lastchild=self)
 
     def load(self, root):
         self._root = root
@@ -155,7 +154,7 @@ class BoostInfoParser(object):
         #if we encounter a {, we are beginning a new context
         # TODO: error if there was already a subcontext here
         if string[0] == '{':
-            context = context.lastChild
+            context = context.lastchild
             return context
 
         # if we encounter a }, we are ending a list context
@@ -180,7 +179,6 @@ class BoostInfoParser(object):
     def __getitem__(self, key):
         ctxList = [self._root]
         path = key.split('/')
-        foundVals = []
         for k in path:
             newList = []
             for ctx in ctxList:

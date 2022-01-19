@@ -19,9 +19,9 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
+import configparser                         # Python INI file parser
 import logging                              # Logging facilities
 import multiprocessing                      # Multiprocessing support (for running data streams in the background)
-import os                                   # For creating directories
 import time                                 # For sleep support
 from dab.audio import DABAudioStream        # DAB audio (DAB/DAB+) stream
 from dab.data import DABDataStream          # DAB data (packet mode) stream
@@ -32,21 +32,21 @@ logger = logging.getLogger('server.dab')
 
 # Class that manages individual DAB stream threads
 class DABStreams():
-    def __init__(self, config):
+    def __init__(self, config: configparser.ConfigParser):
         # Set spawn instead of fork, locks up dialog otherwise (TODO find out why)
         multiprocessing.set_start_method('spawn')
 
         self._srvcfg = config
 
-        self.config = None
+        self.config = StreamsConfig()
         self.streams = []
 
     def _start_stream(self, stream, index, output, streamcfg):
         try:
             if streamcfg['output_type'] == 'data':
-                thread = DABDataStream(self._srvcfg, stream, index, streamcfg, output)
+                thread = DABDataStream(self._srvcfg, stream, streamcfg, output)
             else:
-                thread = DABAudioStream(self._srvcfg, stream, index, streamcfg, output)
+                thread = DABAudioStream(self._srvcfg, stream, streamcfg, output)
 
             thread.start()
 
@@ -65,7 +65,6 @@ class DABStreams():
 
     def start(self):
         # Load streams.ini configuration into memory
-        self.config = StreamsConfig()
         cfgfile = self._srvcfg['dab']['stream_config']
         if not self.config.load(cfgfile):
             logger.error(f'Unable to load DAB streams configuration: {cfgfile}')
@@ -86,7 +85,7 @@ class DABStreams():
                 logger.error(f'Unable to start DAB stream "{stream}". {e}.')
 
                 if output is not None:
-                    utils.remove_fifo(out)
+                    utils.remove_fifo(output)
 
                 ret = False
             else:
@@ -102,7 +101,7 @@ class DABStreams():
             except KeyError:
                 return None
         else:
-            for s, t, c, o in self.streams:
+            for s, _, c, _ in self.streams:
                 if s == stream:
                     return c
 
@@ -148,7 +147,7 @@ class DABStreams():
         if self.config is None:
             return
 
-        for s, t, c, o in self.streams:
+        for _, t, _, o in self.streams:
             if t is not None:
                 t.join()
 
@@ -179,7 +178,7 @@ class DABStreams():
         streams = []
 
         if self.config is not None:
-            for s, t, c, o in self.streams:
+            for s, t, _, _ in self.streams:
                 streams.append((s, t.is_alive() if t is not None else None))
 
         return streams

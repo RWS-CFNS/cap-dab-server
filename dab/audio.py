@@ -19,6 +19,7 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
+import configparser                 # Python INI file parser
 import logging                  # Logging facilities
 import os                       # For creating directories
 import subprocess as subproc    # Support for starting subprocesses
@@ -29,7 +30,7 @@ logger = logging.getLogger('server.dab')
 
 # This class represents an audio stream as a thread, defined in streams.ini
 class DABAudioStream(threading.Thread):
-    def __init__(self, config, name, index, streamcfg, output):
+    def __init__(self, config: configparser.ConfigParser, name: str, streamcfg, output):
         threading.Thread.__init__(self)
 
         self.name = name

@@ -30,10 +30,10 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import configparser     # Python INI file parser
 import os               # For creating directories
-from struct import *    # For generating DAB MSC and Packet headers
+import struct			# For generating DAB MSC and Packet headers
 import multiprocessing  # Multiprocessing support (for running data streams in the background)
-import time             # For sleep support
 import utils
 
 # Calculate Packet/MSC data group CRC according to ETSI EN 300 401 V2.1.1 Sections 5.3.2.3 and 5.3.3.4
@@ -50,8 +50,7 @@ def crc16(data):
 
     crc = ~crc & 0xFFFF
 
-    #return ~crc
-    return pack('!H', crc)
+    return struct.pack('!H', crc)
 
 def to_bytes(x: int) -> bytes:
     return x.to_bytes(1, 'big')
@@ -72,7 +71,7 @@ class MSCDataGroupBuilder():
         byte1 |= self.coni << 4 # Continuity index
         byte1 |= self.repi      # Repetition index
 
-        return pack('<cc', to_bytes(byte0), to_bytes(byte1))
+        return struct.pack('<cc', to_bytes(byte0), to_bytes(byte1))
 
     def build(self, data):
         if self.last_data == None or self.last_data != data:
@@ -122,7 +121,7 @@ class PacketBuilder():
         byte2  = 0 << 7                         # Command = Data packet
         byte2 |= data_length                    # Useful data length
 
-        return pack('<ccc', to_bytes(byte0), to_bytes(byte1), to_bytes(byte2))
+        return struct.pack('<ccc', to_bytes(byte0), to_bytes(byte1), to_bytes(byte2))
 
     def _build_packet(self, data, packet_length, data_length):
         # Calculate number of padding bytes conforming to ETSI EN 300 401 V2.1.1 Section 5.3.2.2
@@ -177,7 +176,7 @@ class DABDataStream(multiprocessing.Process):
     # TODO configure in GUI
     BUFFER_SIZE = 1024
 
-    def __init__(self, config, name, index, streamcfg, output):
+    def __init__(self, config: configparser.ConfigParser, name: str, streamcfg, output):
         multiprocessing.Process.__init__(self)
 
         self.name = name

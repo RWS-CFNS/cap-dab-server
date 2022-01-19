@@ -112,7 +112,7 @@ Let's add a __stream__ first.
    DAB+ stream. Navigate to `DAB+` with the arrow keys and press `Spacebar` to
    select.  
    `Return` will move to the next screen.
-4. Select the input source type, choose GStreamer to use a HTTP webstream for
+4. Select the input source type, choose GStreamer to use an HTTP web-stream for
    example.
 5. In the next screen, enter the path (for File and FIFO) or the GSTURI (for
    GStreamer). In our example, we'll use a local VLC instance streaming a
@@ -123,7 +123,7 @@ Let's add a __stream__ first.
 
 Let's add a new __service__ now.
 1. Navigate back to `DAB Configuration` and go to `Services` > `Add`.
-2. Enter a identifier such as `srv-audio` and press `Return`.
+2. Enter an identifier such as `srv-audio` and press `Return`.
 3. For the service ID, use any value, such as `dab` and press `Return`.
 4. In the next screen, select the stream we've just created.
 5. All done for now.  
@@ -171,7 +171,7 @@ TODO
 - [ ] Logging - Add stream logs to GUI
 - [x] Option to use ODR-DabMod config file instead of fifo output
 - [ ] Option to restart threads that have quit
-- [x] Use ZeroMQ ipc instead of telnet for communication with odr-dabmux
+- [x] Use ZeroMQ IPC instead of telnet for communication with odr-dabmux
 - [x] Allow user to select which announcement to use for CAP messages
 - [ ] Implement more of the CAP spec (message updates, ...)
 - [ ] Split admin interface from server component

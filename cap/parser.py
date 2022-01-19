@@ -47,7 +47,7 @@ class CAPParser():
         self.app = app
 
         # parse stricty, adhering to not only the CAP v1.2 standard but also the NL broker standards
-        self.strict = strict
+        self._strict = strict
 
         self.src_identifier = identifier
         self.src_sender = sender
@@ -121,7 +121,7 @@ class CAPParser():
         # check <language>, as it should basically always be present
         if info.find(f'CAPv1.2:language', self.NS) is None:
             # Allow when not running in strict mode
-            if utils.logger_strict(logger, '{required element missing from <info> container: language'):
+            if utils.logger_strict(logger, self._strict, '{required element missing from <info> container: language'):
                 return False
 
         # check <category>, it should always have a value of 'Safety'
@@ -200,7 +200,7 @@ class CAPParser():
         if scope != 'Public':
             # In production this should always be 'Public'. In a development/test environment this may
             # not always be this case.
-            if utils.logger_strict(logger, f'invalid scope: {scope}'):
+            if utils.logger_strict(logger, self._strict, f'invalid scope: {scope}'):
                 return False
 
         return True
@@ -235,7 +235,7 @@ class CAPParser():
 
         # Check the if the namespace matches what is expected of the main broker (CAP v1.2)
         if root.tag != f'{{{self.NS["CAPv1.2"]}}}alert':
-            if utils.logger_strict(logger, f'invalid namespace: {root.tag}'):
+            if utils.logger_strict(logger, self._strict, f'invalid namespace: {root.tag}'):
                 return False
 
         # Check if all required elements are present

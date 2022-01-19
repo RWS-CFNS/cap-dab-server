@@ -37,7 +37,6 @@ import logging.handlers             # Logging handlers
 import queue                        # Queue for passing data to the DAB processing thread
 import socket                       # To get the system's hostname
 import string                       # String utilities (for checking if string is hexadecimal)
-import threading                    # Threading support (for running Flask and DAB Mux/Mod in the background)
 import time                         # For sleep support
 from dialog import Dialog           # Beautiful dialogs using the external program dialog
 from cap.server import CAPServer    # CAP server
