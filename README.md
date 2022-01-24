@@ -188,7 +188,6 @@ can be found in `DAB` > `Warning settings` and `CAP`.
 - [ ] Don't start the CAP server and Watcher thread if all warning methods are disabled
 
 # Known issues
-- DAB data streams don't properly shut down because read blocks the stream thread
 - English (en-US) TTS output doesn't generate correctly on macOS, consider using
   another TTS library than pyttsx3
 
