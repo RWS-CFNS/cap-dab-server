@@ -150,13 +150,22 @@ A sample `dabmod.ini` for use with a HackRF-One can be found in
 `doc/dabmod_hackrf.ini`.
 
 ## Alarm announcements
-TODO
+You can configure what announcements are supported by what service:
+1. Navigate to `DAB` > `Services` > `[service]` > `Announcements`
+2. Select which announcements you want this service to support
+
+Announcements will instruct DAB receivers to switch to another channel (if
+supported by the received). This is configured ensemble-wide.  
+Currently, the ensemble announcement settings are not configurable from the TUI.
+Instead, you'll have to edit the ODR-DabMux configuration file manually.
+This can be done by opening `$XDG_CONFIG_HOME/cap-dab-server/dabmux.mux` with
+your preferred text-editor.
+Please refer to the sample configuration file included with ODR-DabMux for
+instructions. We hope to add this functionality in future releases.
 
 ## CAP announcements
-TODO
-
-# Warning method
-TODO
+Settings for CAP announcements are fully customizable from the TUI. The settings
+can be found in `DAB` > `Warning settings` and `CAP`.
 
 # Limitations
 - OE (Other Ensemble) announcement switching is not supported
