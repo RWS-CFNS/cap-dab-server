@@ -19,26 +19,27 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-import configparser                 # Python INI file parser
-import logging                  # Logging facilities
-import os                       # For creating directories
-import subprocess as subproc    # Support for starting subprocesses
-import threading                # Threading support (for running streams in the background)
-import time                     # For sleep support
+from configparser import ConfigParser   # For parsing the server config
+import logging                          # Logging facilities
+import os                               # For creating directories
+import subprocess as subproc            # Support for starting subprocesses
+import threading                        # Threading support (for running streams in the background)
+import time                             # For sleep support
 
 logger = logging.getLogger('server.dab')
 
-# This class represents an audio stream as a thread, defined in streams.ini
 class DABAudioStream(threading.Thread):
-    def __init__(self, config: configparser.ConfigParser, name: str, streamcfg, output):
+    """ This class represents an audio stream as a thread, defined in streams.ini """
+
+    def __init__(self, srvcfg:ConfigParser, name:str, streamcfg, output_path:str):
         threading.Thread.__init__(self)
 
         self.name = name
         self.streamcfg = streamcfg
-        self.output = output
+        self.output_path = output_path
 
-        self.streamdir = f'{config["general"]["logdir"]}/streams/{self.name}'
-        self.binpath = config['dab']['odrbin_path']
+        self.streamdir = f'{srvcfg["general"]["logdir"]}/streams/{self.name}'
+        self.binpath = srvcfg['dab']['odrbin_path']
 
         self.audio = None
         self.pad = None
@@ -54,6 +55,8 @@ class DABAudioStream(threading.Thread):
         self._running = True
 
     def run(self):
+        """ Start this audio stream """
+
         # If DLS and MOT are disabled, we won't need to start odr-padenc
         pad_enable = self.streamcfg.getboolean('dls_enable') or self.streamcfg.getboolean('mot_enable')
 
@@ -69,7 +72,7 @@ class DABAudioStream(threading.Thread):
                                 f'{self.binpath}/odr-audioenc',
                                 f'--bitrate={self.streamcfg["bitrate"]}',
                                  '-D',
-                                f'--output=ipc://{self.output}',
+                                f'--output=ipc://{self.output_path}',
                             ]
             if pad_enable:
                 audioenc_cmdline.append(f'--pad-socket={self.name}')
@@ -140,8 +143,11 @@ class DABAudioStream(threading.Thread):
         if pad_enable:
             padlog.close()
 
-    # TODO log termination
-    def join(self, timeout=5):
+    def join(self, timeout:int=5):
+        """ Stop this audio stream """
+
+        # TODO log termination
+
         if not self.is_alive():
             return
 

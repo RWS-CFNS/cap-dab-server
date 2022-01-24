@@ -2,6 +2,11 @@ cap-dab-server is a piece of software that combines existing DAB broadcasting
 utilities (from ODR-mmbTools) with a friendly user-interface into a solution
 capable of translating CAP (Common Alerting Protocol) messages to a DAB/DAB+
 emergency warning broadcast.
+cap-dab-server can also server as an easy-to-use frontend to setup a simple
+DAB/DAB+ ensemble without utilizing any of the CAP or announcement
+functionality. You might find its feature set somewhat limited compared to the
+manually editing the configuration files provided by ODR-mmbTools (see
+Limitations).
 
 ![Main menu](main_menu.png)
 
@@ -18,6 +23,8 @@ Features include:
 
 ![Integration with other CFNS systems](integration.png)
 
+![Architecture of cap-dab-server](architecture.png)
+
 # Installation
 Requirements:
 - dialog (TUI)
@@ -28,7 +35,7 @@ Requirements:
 - odr-padenc (DAB PAD Encoder)
 - odr-dabmux (DAB Multiplexer)
 - odr-dabmod (DAB Modulator)
-- Python 3.9+
+- Python 3.10+
 - python-Flask (HTTP server)
 - python-pyttsx3 (TTS)
 - python-pythondialog (TUI)
@@ -134,9 +141,13 @@ Let's add a new __service__ now.
 > `Save` to save your configured changes and restart the DAB server.
 
 ## Broadcasting
-From the main menu, check that
+cap-dab-server automatically starts ODR-DabMod. Configuration for ODR-DabMod
+however, cannot be configured from the TUI Admin interface.
+By default, cap-dab-server expects the configuration file to be located in
+`$XDG_CONFIG_HOME/cap-dab-server/dabmod.ini`.
 
-TODO modulator configuration
+A sample `dabmod.ini` for use with a HackRF-One can be found in
+`doc/dabmod_hackrf.ini`.
 
 ## Alarm announcements
 TODO
@@ -150,29 +161,19 @@ TODO
 # Limitations
 - OE (Other Ensemble) announcement switching is not supported
 - Secondary service components are currently not configurable from the TUI
+- Not all other features of ODR-DabMux are currently supported
+- Editing the ODR-DabMod configuration file from the UI is currently not
+  supported
 
 # TODO
-- [x] Automatically create fifo
-- [x] Stream class
-- [x] Stream management
-- [x] Implement stream replacement without use of external scripts
-- [x] TTS
-- [x] Implement ability to cancel announcements
 - [ ] Change Alarm channel/stream replacement DLS text (and change back after cancel)
-- [x] Configurable label, pty and such for stream replacement/alarm channel
-- [x] Manual announcement triggering
-- [ ] GUI config - Ensemble announcement
-- [x] GUI config - Service PTY and Announcement
-- [x] GUI config - Subchannels
-- [x] GUI config - Stream
-- [ ] GUI config - DAB modulator
-- [ ] GUI config - Packet address
-- [x] Settings - CAP identity
+- [ ] TUI config - Ensemble announcement
+- [ ] TUI config - DAB modulator
+- [ ] TUI config - Packet address
+- [ ] Option to send CAP messages from the TUI
 - [ ] Logging - Add stream logs to GUI
 - [x] Option to use ODR-DabMod config file instead of fifo output
 - [ ] Option to restart threads that have quit
-- [x] Use ZeroMQ IPC instead of telnet for communication with odr-dabmux
-- [x] Allow user to select which announcement to use for CAP messages
 - [ ] Implement more of the CAP spec (message updates, ...)
 - [ ] Split admin interface from server component
 - [ ] Don't start the CAP server and Watcher thread if all warning methods are disabled

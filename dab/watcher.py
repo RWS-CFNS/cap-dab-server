@@ -30,9 +30,12 @@ import utils
 
 logger = logging.getLogger('server.dab')
 
-# DAB queue watcher and message processing
-# This thread handles messages received from the CAPServer
-class DABWatcher(threading.Thread):
+class CAPWatcher(threading.Thread):
+    """
+    DAB queue watcher and message processing
+    This thread handles messages received from the CAPServer
+    """
+
     # TODO support more languages
     TTS_MESSAGES = {
         'en-US': ('Message {num}', 'End of message {num}', 'A replay will now follow'),
@@ -40,19 +43,20 @@ class DABWatcher(threading.Thread):
         'nl-NL': ('Bericht {num}', 'Einde bericht {num}', 'Er volgt nu een herhaling')
     }
 
-    def __init__(self, config, q, zmqsock, streams, muxcfg):
+    def __init__(self, srvcfg, q, zmqsock, streams, muxcfg):
         threading.Thread.__init__(self)
 
         self.q = q
         self.zmqsock = zmqsock
         self.streams = streams
-        self.config = config
         self.muxcfg = muxcfg.cfg
+        self.srvcfg = srvcfg
 
-        self.alarm = config['warning'].getboolean('alarm')
-        self.replace = config['warning'].getboolean('replace')
-        self.data = config['warning'].getboolean('data')
-        self.alarmpath = f'{config["general"]["logdir"]}/streams/sub-alarm'
+        self.alarm = srvcfg['warning'].getboolean('alarm')
+        self.replace = srvcfg['warning'].getboolean('replace')
+        self.data = srvcfg['warning'].getboolean('data')
+        self.alarmpath = f'{srvcfg["general"]["logdir"]}/streams/sub-alarm'
+        self.announcement = srvcfg['warning']['announcement']
 
         # Create a fifo for data stream broadcasting
         # TODO create a temporary file in /tmp instead?
@@ -101,13 +105,13 @@ class DABWatcher(threading.Thread):
 
         # Signal the alarm announcement if enabled in settings
         if self.alarm:
-            out = utils.mux_send(self.zmqsock, ('set', self.config['warning']['announcement'], 'active', '1'))
+            out = utils.mux_send(self.zmqsock, ('set', self.announcement, 'active', '1'))
             logger.info(f'Activating alarm announcement, res: {out}')
 
         # Perform stream replacement if enabled in settings
         if self.replace:
             try:
-                utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, 'file', wav)
+                utils.replace_streams(self.zmqsock, self.srvcfg, self.muxcfg, self.streams, 'file', wav)
             except Exception as e:
                 logger.error(f'Failed to perform stream replacement: {e}')
             else:
@@ -218,7 +222,7 @@ class DABWatcher(threading.Thread):
                                 cancelled = True
 
                     # Prevent restarting the stream(s) if no message was cancelled
-                    if cancelled == False:
+                    if not cancelled:
                         logger.warn(f'Invalid CAP cancel request: {ref["identifier"]} {ref["sender"]} {ref["sent"]}')
 
                         self.q.task_done()
@@ -244,14 +248,14 @@ class DABWatcher(threading.Thread):
 
                         if self.replace:
                             try:
-                                utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams)
+                                utils.replace_streams(self.zmqsock, self.srvcfg, self.muxcfg, self.streams)
                             except Exception as e:
                                 logger.error(f'Failed to restore original audio streams: {e}')
                             else:
                                 logger.info('Original audio streams restored successfully')
                     elif self.data:
                         try:
-                            utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, None, None, data_streams=True)
+                            utils.replace_streams(self.zmqsock, self.srvcfg, self.muxcfg, self.streams, None, None, data_streams=True)
                         except Exception as e:
                             logger.error(f'Failed to restore original data streams: {e}')
                         else:
@@ -269,7 +273,7 @@ class DABWatcher(threading.Thread):
                 # Replace data streams with a custom stream of warnings
                 if self.data and datastreams > 0:
                     try:
-                        utils.replace_streams(self.zmqsock, self.config, self.muxcfg, self.streams, 'fifo', self.datafifo, True)
+                        utils.replace_streams(self.zmqsock, self.srvcfg, self.muxcfg, self.streams, 'fifo', self.datafifo, True)
                     except Exception as e:
                         logger.error(f'Failed to perform stream replacement: {e}')
                     else:

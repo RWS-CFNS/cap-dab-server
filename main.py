@@ -27,22 +27,22 @@ import os
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-# Check Python version, need 3.7+ for ordered dictionaries
-assert sys.version_info >= (3, 7)
+# Check Python version, we need at least 3.10
+assert sys.version_info >= (3, 10)
 
-import configparser                 # Python INI file parser
-import getpass                      # For getting the current user
-import logging                      # Logging facilities
-import logging.handlers             # Logging handlers
-import queue                        # Queue for passing data to the DAB processing thread
-import socket                       # To get the system's hostname
-import string                       # String utilities (for checking if string is hexadecimal)
-import time                         # For sleep support
-from dialog import Dialog           # Beautiful dialogs using the external program dialog
-from cap.server import CAPServer    # CAP server
-from dab.server import DABServer    # DAB server
-from dab.streams import DABStreams  # DAB streams
-import dab.types                    # DAB types
+from configparser import ConfigParser   # Python INI file parser
+import getpass                          # For getting the current user
+import logging                          # Logging facilities
+import logging.handlers                 # Logging handlers
+import queue                            # Queue for passing data to the DAB processing thread
+import socket                           # To get the system's hostname
+import string                           # String utilities (for checking if string is hexadecimal)
+import time                             # For sleep support
+from dialog import Dialog               # Beautiful dialogs using the external program dialog
+from cap.server import CAPServer        # CAP server
+from dab.server import DABServer        # DAB server
+from dab.streams import DABStreams      # DAB streams
+import dab.types                        # DAB types
 import utils
 
 # Max path length from limits.h
@@ -63,29 +63,29 @@ except KeyError:
 # Setup the main server config file
 server_config = f'{CONFIG_HOME}/cap-dab-server/server.ini'
 os.makedirs(os.path.dirname(server_config), exist_ok=True)
-config = configparser.ConfigParser()
+srvcfg = ConfigParser()
 if os.path.isfile(server_config):
-    config.read(server_config)
+    srvcfg.read(server_config)
 else:
-    config['general'] = {
+    srvcfg['general'] = {
                          'logdir': f'{CACHE_HOME}/cap-dab-server',
                          'max_log_size': '8192',
                          'queuelimit': '10'
                         }
-    config['dab'] =     {
+    srvcfg['dab'] =     {
                          'stream_config': f'{CONFIG_HOME}/cap-dab-server/streams.ini',
                          'odrbin_path': f'/usr/local/bin',
                          'mux_config': f'{CONFIG_HOME}/cap-dab-server/dabmux.mux',
                          'mod_config': f'{CONFIG_HOME}/cap-dab-server/dabmod.ini'
                         }
-    config['cap'] =     {
+    srvcfg['cap'] =     {
                          'host': '127.0.0.1',
                          'port': '39800',
                          'identifier': f'cap-dab-server.{socket.gethostname()}',
                          'sender': f'{getpass.getuser()}@{socket.gethostname()}',
                          'strict_parsing': 'no'
                         }
-    config['warning'] = {
+    srvcfg['warning'] = {
                          'alarm': 'yes',
                          'replace': 'yes',
                          'data': 'no',
@@ -96,18 +96,18 @@ else:
                         }
 
     with open(server_config, 'w') as config_file:
-        config.write(config_file)
+        srvcfg.write(config_file)
 
 # Create directories if they didn't exist yet
-os.makedirs(config['general']['logdir'], exist_ok=True)
-os.makedirs(config['dab']['odrbin_path'], exist_ok=True)
-os.makedirs(os.path.dirname(config['dab']['mux_config']), exist_ok=True)
-os.makedirs(os.path.dirname(config['dab']['mod_config']), exist_ok=True)
+os.makedirs(srvcfg['general']['logdir'], exist_ok=True)
+os.makedirs(srvcfg['dab']['odrbin_path'], exist_ok=True)
+os.makedirs(os.path.dirname(srvcfg['dab']['mux_config']), exist_ok=True)
+os.makedirs(os.path.dirname(srvcfg['dab']['mod_config']), exist_ok=True)
 
 # Setup a general server logger
 logger = logging.getLogger('server')
 logger.setLevel(logging.INFO)
-handler = logging.handlers.RotatingFileHandler(f'{config["general"]["logdir"]}/server.log', mode='a', maxBytes=int(config['general']['max_log_size'])*1024, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(f'{srvcfg["general"]["logdir"]}/server.log', mode='a', maxBytes=int(srvcfg['general']['max_log_size'])*1024, backupCount=5)
 handler.setFormatter(logging.Formatter(fmt='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', datefmt='%y-%m-%d %H:%M:%s'))
 handler.setLevel(logging.INFO)
 logger.addHandler(handler)
@@ -163,9 +163,9 @@ def status():
     def state(b):
         if b is None:
             return '\Zb\Z1MISCFG\Zn'
-        elif b == True:
+        elif b:
             return '\Zb\Z2OK\Zn'
-        elif b == False:
+        elif not b:
             return '\Zb\Z1STOPPED\Zn'
 
     while True:
@@ -273,8 +273,8 @@ def dab_config():
             _error('Not Yet Implemented')
             #code, tags = d.checklist('Please configure the announcements you would like the ensemble to support.',
             #                        title=f'Warning method - {TITLE}', choices=[
-            #        ('Alarm',    'nt', config['warning'].getboolean('alarm')),
-            #        ('Replace',  '', config['warning'].getboolean('replace'))
+            #        ('Alarm',    'nt', srvcfg['warning'].getboolean('alarm')),
+            #        ('Replace',  '', srvcfg['warning'].getboolean('replace'))
             #        ])
 
         while True:
@@ -497,7 +497,7 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                                         ('', 1, 1, sid[3:], 1, 1, 4, 3)
                                         ])
 
-                    if no_cancel == False and code in (Dialog.CANCEL, Dialog.ESC):
+                    if not no_cancel and code in (Dialog.CANCEL, Dialog.ESC):
                         break
                     elif code == Dialog.OK:
                         if not all(c in string.hexdigits for c in elems[0]):
@@ -666,13 +666,13 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             menu = []
 
             # Load in the currently configured announcement
-            curann = config['warning']['announcement']
+            curann = srvcfg['warning']['announcement']
 
             for name, announcement in dabsrv.config.cfg.ensemble.announcements:
                 cluster = str(announcement.cluster)
 
                 supported = ''
-                for atype, state in announcement.flags:
+                for atype, _ in announcement.flags:
                     if announcement.flags.getboolean(atype):
                         supported += f'{atype}, '
                 supported = supported[:-2]
@@ -684,25 +684,25 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
             code, tag = d.radiolist('', title=f'CAP announcement - {localtitle}', choices=menu)
 
             if code == Dialog.OK:
-                config['warning']['announcement'] = tag
+                srvcfg['warning']['announcement'] = tag
 
                 # FIXME save in the previous menu not here
                 with open(server_config, 'w') as config_file:
-                    config.write(config_file)
+                    srvcfg.write(config_file)
 
         def method():
             code, tags = d.checklist('Select the method by which you want the server to send DAB warning messages',
                                     title=f'Method - {localtitle}', choices=[
-                    ('Alarm',    'DAB native Alarm announcement', config['warning'].getboolean('alarm')),
-                    ('Replace',  'Subchannel audio stream replacement', config['warning'].getboolean('replace')),
-                    ('Data',     'Subchannel data stream replacement', config['warning'].getboolean('data'))
+                    ('Alarm',    'DAB native Alarm announcement', srvcfg['warning'].getboolean('alarm')),
+                    ('Replace',  'Subchannel audio stream replacement', srvcfg['warning'].getboolean('replace')),
+                    ('Data',     'Subchannel data stream replacement', srvcfg['warning'].getboolean('data'))
                     ])
 
             if code == Dialog.OK:
                 # Save the changes
-                config['warning']['Alarm'] = 'yes' if 'Alarm' in tags else 'no'
-                config['warning']['Replace'] = 'yes' if 'Replace' in tags else 'no'
-                config['warning']['Data'] = 'yes' if 'Data' in tags else 'no'
+                srvcfg['warning']['Alarm'] = 'yes' if 'Alarm' in tags else 'no'
+                srvcfg['warning']['Replace'] = 'yes' if 'Replace' in tags else 'no'
+                srvcfg['warning']['Data'] = 'yes' if 'Data' in tags else 'no'
 
         while True:
             code, tag = d.menu('', title=localtitle, cancel_label='Back', choices=[
@@ -718,29 +718,29 @@ The \ZbService ID\Zn is a 3 character, unique, hexadecimal identifier for a serv
                 cap_announcement()
             elif tag == 'Label':
                 label, shortlabel = _label_config(localtitle,
-                                                  str(config['warning']['label']),
-                                                  str(config['warning']['shortlabel']))
+                                                  str(srvcfg['warning']['label']),
+                                                  str(srvcfg['warning']['shortlabel']))
 
                 if label is not None:
-                    config['warning']['label'] = label
+                    srvcfg['warning']['label'] = label
 
                     if shortlabel is not None:
-                        config['warning']['shortlabel'] = shortlabel
+                        srvcfg['warning']['shortlabel'] = shortlabel
                     else:
-                        config['warning']['shortlabel'] = label[:8]
+                        srvcfg['warning']['shortlabel'] = label[:8]
 
                 # FIXME save in the previous menu not here
                 with open(server_config, 'w') as config_file:
-                    config.write(config_file)
+                    srvcfg.write(config_file)
             elif tag == 'Programme Type':
-                pty = _pty_config(f'PTY - {localtitle}', int(config['warning']['pty']))
+                pty = _pty_config(f'PTY - {localtitle}', int(srvcfg['warning']['pty']))
 
                 if pty is not None:
-                    config['warning']['pty'] = str(pty)
+                    srvcfg['warning']['pty'] = str(pty)
 
                 # FIXME save in the previous menu not here
                 with open(server_config, 'w') as config_file:
-                    config.write(config_file)
+                    srvcfg.write(config_file)
             elif tag == 'Warning method':
                 method()
 
@@ -787,43 +787,43 @@ def settings():
             ('Server config',       1,  1, server_config,                     1,  20, 64, MAX_PATH, 2,
              'server.ini config file path'),
 
-            ('Log directory',       2,  1, config['general']['logdir'],       2,  20, 64, MAX_PATH, 0,
+            ('Log directory',       2,  1, srvcfg['general']['logdir'],       2,  20, 64, MAX_PATH, 0,
              'Directory to write log files to'),
 
-            ('Max log size',        3,  1, config['general']['max_log_size'], 3,  20, 8,  7,        0,
+            ('Max log size',        3,  1, srvcfg['general']['max_log_size'], 3,  20, 8,  7,        0,
              'Maximum size per log file in Kb'),
 
-            ('CAP-DAB queue limit', 4,  1, config['general']['queuelimit'],   4,  20, 8,  7,        0,
+            ('CAP-DAB queue limit', 4,  1, srvcfg['general']['queuelimit'],   4,  20, 8,  7,        0,
              'Maximum number of CAP messages that can be in the queue at one moment (requires manual restart)'),
 
-            ('Streams config',      5,  1, config['dab']['stream_config'],    5,  20, 64, MAX_PATH, 0,
+            ('Streams config',      5,  1, srvcfg['dab']['stream_config'],    5,  20, 64, MAX_PATH, 0,
              'streams.ini config file path'),
 
-            ('ODR binaries path',   6,  1, config['dab']['odrbin_path'],      6,  20, 64, MAX_PATH, 0,
+            ('ODR binaries path',   6,  1, srvcfg['dab']['odrbin_path'],      6,  20, 64, MAX_PATH, 0,
              'Directory containing ODR-DabMux, ODR-DabMod, ODR-PadEnc and ODR-AudioEnc'),
 
-            ('ODR-DabMux config',   7,  1, config['dab']['mux_config'],       7,  20, 64, MAX_PATH, 0,
+            ('ODR-DabMux config',   7,  1, srvcfg['dab']['mux_config'],       7,  20, 64, MAX_PATH, 0,
              'dabmux.mux config file path'),
 
-            ('ODR-DabMod config',   8,  1, config['dab']['mod_config'],       8,  20, 64, MAX_PATH, 0,
+            ('ODR-DabMod config',   8,  1, srvcfg['dab']['mod_config'],       8,  20, 64, MAX_PATH, 0,
              'dabmod.ini config file path')
             ])
 
         if code == Dialog.OK:
             # Save the changes
-            config['general'] = {
+            srvcfg['general'] = {
                                  'logdir':       elems[1],
                                  'max_log_size': elems[2],
                                  'queuelimit':   elems[3]
                                 }
-            config['dab'] =     {
+            srvcfg['dab'] =     {
                                  'stream_config':elems[4],
                                  'odrbin_path':  elems[5],
                                  'mux_config':   elems[6],
                                  'mod_config':   elems[7]
                                 }
             with open(server_config, 'w') as config_file:
-                config.write(config_file)
+                srvcfg.write(config_file)
 
             # Restart the CAP and DAB server to apply changes
             d.gauge_start('', height=6, width=64, percent=0)
@@ -858,7 +858,7 @@ def log():
                           ('Modulator',     'View DAB Modulator log')
                           ])
 
-        logdir = config['general']['logdir']
+        logdir = srvcfg['general']['logdir']
 
         if code in (Dialog.CANCEL, Dialog.ESC):
             break
@@ -875,19 +875,19 @@ def cap_config():
     while True:
         code, elems = d.mixedform('', title='CAP Configuration', colors=True, ok_label='Save',
                                   item_help=True, help_tags=True, elements=[
-            ('Server host',         1, 1, config['cap']['host'],            1, 20, 46, 45,  0,
+            ('Server host',         1, 1, srvcfg['cap']['host'],            1, 20, 46, 45,  0,
              'IP address to host CAP HTTP server on (IPv4/IPv6)'),
 
-            ('Server port',         2, 1, config['cap']['port'],            2, 20, 6,  5,   0,
+            ('Server port',         2, 1, srvcfg['cap']['port'],            2, 20, 6,  5,   0,
              'Port to host CAP HTTP server on'),
 
-            ('Identifier prefix',   3, 1, config['cap']['identifier'],      3, 20, 46, 128, 0,
+            ('Identifier prefix',   3, 1, srvcfg['cap']['identifier'],      3, 20, 46, 128, 0,
              'String to prefix to the CAP message identifier: format will be: {prefix}.{msg_counter}'),
 
-            ('Sender',              4, 1, config['cap']['sender'],          4, 20, 46, 128, 0,
+            ('Sender',              4, 1, srvcfg['cap']['sender'],          4, 20, 46, 128, 0,
              'CAP sender identifier'),
 
-            ('Strict parsing',      5, 1, config['cap']['strict_parsing'],  5, 20, 4,  3,   0,
+            ('Strict parsing',      5, 1, srvcfg['cap']['strict_parsing'],  5, 20, 4,  3,   0,
              'Enforce strict CAP XML parsing [yes/no]')
             ])
 
@@ -898,7 +898,7 @@ def cap_config():
                 continue
 
             # Save the changes
-            config['cap'] = {
+            srvcfg['cap'] = {
                              'host':             elems[0],
                              'port':             elems[1],
                              'identifier':       elems[2],
@@ -906,7 +906,7 @@ def cap_config():
                              'strict_parsing':   elems[4]
                             }
             with open(server_config, 'w') as config_file:
-                config.write(config_file)
+                srvcfg.write(config_file)
 
             # Restart the CAP server to apply changes
             d.gauge_start('', height=6, width=64, percent=0)
@@ -1008,14 +1008,14 @@ def main():
     d.set_background_title('CFNS - Rijkswaterstaat CIV, Delft © 2021 - 2022 | Bastiaan Teeuwen <bastiaan@mkcl.nl>')
 
     # Setup a queue for synchronizing data between the CAP and DAB threads
-    q = queue.Queue(maxsize=int(config['general']['queuelimit']))
+    q = queue.Queue(maxsize=int(srvcfg['general']['queuelimit']))
 
     GAUGE_HEIGHT = 6
     GAUGE_WIDTH = 64
 
     # Start up CAP server
     d.gauge_start('Starting CAP Server...', height=GAUGE_HEIGHT, width=GAUGE_WIDTH, percent=0)
-    capsrv = CAPServer(config, q)
+    capsrv = CAPServer(srvcfg, q)
     if not capsrv.start():
         d.gauge_stop()
         d.msgbox('Failed to start CAP server, please refer to the server logs', title='Error',
@@ -1024,7 +1024,7 @@ def main():
 
     # Start the DAB streams
     d.gauge_update(33, 'Starting DAB streams...', update_text=True)
-    dabstreams = DABStreams(config)
+    dabstreams = DABStreams(srvcfg)
     if not dabstreams.start():
         d.gauge_stop()
         d.msgbox('Failed to start one or more DAB streams, please check configuration', title='Error',
@@ -1033,7 +1033,7 @@ def main():
 
     # Start the DAB server
     d.gauge_update(66, 'Starting DAB server...', update_text=True)
-    dabsrv = DABServer(config, q, dabstreams)
+    dabsrv = DABServer(srvcfg, q, dabstreams)
     if not dabsrv.start():
         d.gauge_stop()
         d.msgbox('Failed to start DAB server, please refer to the server logs', title='Error',

@@ -19,31 +19,32 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-import atexit                       # For cleaning up ZMQ context upon garbage collection
-import configparser                 # Python INI file parser
-import os                           # For file I/O
-import logging                      # Logging facilities
-import queue                        # Queue for passing data to the DAB processing thread
-import subprocess as subproc        # Support for starting subprocesses
-import threading                    # Threading support (for running odr-dabmux and odr-dabmod in the background)
-import time                         # For sleep support
-import zmq                          # For signalling (alarm) announcements to ODR-DabMux
-from dab.muxcfg import ODRMuxConfig # odr-dabmux config
-from dab.streams import DABStreams	# DAB streams manager
-from dab.watcher import DABWatcher  # DAB CAP message watcher
+import atexit                           # For cleaning up ZMQ context upon garbage collection
+from configparser import ConfigParser   # For parsing the server config
+import os                               # For file I/O
+import logging                          # Logging facilities
+import queue                            # Queue for passing data to the DAB processing thread
+import subprocess as subproc            # Support for starting subprocesses
+import threading                        # Threading support (for running odr-dabmux and odr-dabmod in the background)
+import time                             # For sleep support
+import zmq                              # For signalling (alarm) announcements to ODR-DabMux
+from dab.muxcfg import ODRMuxConfig     # odr-dabmux config
+from dab.streams import DABStreams      # DAB streams manager
+from dab.watcher import CAPWatcher      # DAB CAP message watcher
 import utils
 
 logger = logging.getLogger('server.dab')
 
-# OpenDigitalRadio DAB Multiplexer and Modulator support
 class ODRServer(threading.Thread):
-    def __init__(self, config):
+    """ OpenDigitalRadio DAB Multiplexer and Modulator support """
+
+    def __init__(self, srvcfg:ConfigParser):
         threading.Thread.__init__(self)
 
-        self.logdir = config['general']['logdir']
-        self.binpath = config['dab']['odrbin_path']
-        self.muxcfg = config['dab']['mux_config']
-        self.modcfg = config['dab']['mod_config']
+        self.logdir = srvcfg['general']['logdir']
+        self.binpath = srvcfg['dab']['odrbin_path']
+        self.muxcfg = srvcfg['dab']['mux_config']
+        self.modcfg = srvcfg['dab']['mod_config']
         self.output = '/tmp/welle-io.fifo'           # FIXME FIXME FIXME FIXME get from dabmod.ini (filename)
 
         self.mux = None
@@ -67,6 +68,8 @@ class ODRServer(threading.Thread):
         self._running = True
 
     def run(self):
+        """ Start the DAB server thread, which includes odr-dabmux and odr-dabmod """
+
         # TODO rotate this log, this is not so straightforward it appears
         muxlog = open(f'{self.logdir}/dabmux.log', 'ab')
         modlog = open(f'{self.logdir}/dabmod.log', 'ab')
@@ -103,6 +106,8 @@ class ODRServer(threading.Thread):
         muxlog.close()
 
     def join(self):
+        """ Terminate the DAB server thread """
+
         if not self.is_alive():
             return
 
@@ -129,8 +134,10 @@ class ODRServer(threading.Thread):
         super().join()
 
 class DABServer():
-    def __init__(self, config: configparser.ConfigParser, q: queue.Queue, streams: DABStreams):
-        self._srvcfg = config
+    """ DABServer and CAPWatcher management class """
+
+    def __init__(self, srvcfg:ConfigParser, q:queue.Queue, streams:DABStreams):
+        self._srvcfg = srvcfg
         self._q = q
         self._streams = streams
 
@@ -141,13 +148,15 @@ class DABServer():
         self._zmq = zmq.Context()
         self.zmqsock = None
 
-        atexit.register(self.deinit)
+        atexit.register(self._deinit)
 
-    def deinit(self):
+    def _deinit(self):
         if self._zmq:
             self._zmq.destroy(linger=5)
 
-    def start(self):
+    def start(self) -> bool:
+        """ Start DABServer, CAPWatcher and load odr-dabmux configuration into memory """
+
         # Create a temporary fifo for IPC with ODR-DabMux over ZMQ
         self._zmqsock_path = utils.create_fifo()
 
@@ -184,10 +193,10 @@ class DABServer():
 
         # Start a watcher thread to process messages from the CAPServer
         try:
-            self._watcher = DABWatcher(self._srvcfg, self._q, self.zmqsock, self._streams, self.config)
+            self._watcher = CAPWatcher(self._srvcfg, self._q, self.zmqsock, self._streams, self.config)
             self._watcher.start()
         except:
-            err = 'Unable to start DAB watcher thread.'
+            err = 'Unable to start CAPWatcher thread.'
             try:
                 raise
             except KeyError as e:
@@ -203,6 +212,8 @@ class DABServer():
         return True
 
     def stop(self):
+        """ Stop DABServer and CAPWatcher """
+
         if self.config is None:
             return
 
@@ -216,7 +227,9 @@ class DABServer():
         if self._watcher is not None:
             self._watcher.join()
 
-    def restart(self):
+    def restart(self) -> bool:
+        """ Restart DABServer, CAPWatcher and reload the odr-dabmux config """
+
         if self.config is None:
             return False
 
@@ -226,8 +239,9 @@ class DABServer():
         # Start the server back up
         return self.start()
 
-    # Return the status of the (DAB Server, DAB watcher, DAB Multiplexer, DAB MOdulator)
-    def status(self):
+    def status(self) -> tuple[bool, bool, bool, bool]:
+        """ Retrieve the status of the (DABServer, CAPWatcher, DAB Multiplexer, DAB Modulator) in a tuple """
+
         if self.config is None:
             return (False, False, False, False)
 

@@ -1,4 +1,6 @@
 #
+# Modified from: https://gist.github.com/thecodemaiden/dc4e4e4a54eaa5f0be84
+#
 # Copyright (C) 2014 Regents of the University of California.
 # Author: Adeola Bannis
 # Edit by: Copyright (C) 2021 Bastiaan Teeuwen <bastiaan@mkcl.nl>

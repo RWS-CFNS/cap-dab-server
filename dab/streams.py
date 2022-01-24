@@ -30,13 +30,14 @@ import utils
 
 logger = logging.getLogger('server.dab')
 
-# Class that manages individual DAB stream threads
 class DABStreams():
-    def __init__(self, config: configparser.ConfigParser):
+    """ Class that manages individual DAB stream threads """
+
+    def __init__(self, srvcfg: configparser.ConfigParser):
         # Set spawn instead of fork, locks up dialog otherwise (TODO find out why)
         multiprocessing.set_start_method('spawn')
 
-        self._srvcfg = config
+        self._srvcfg = srvcfg
 
         self.config = StreamsConfig()
         self.streams = []
@@ -93,8 +94,9 @@ class DABStreams():
 
         return ret
 
-    # Get the specified stream's configuration
     def getcfg(self, stream, default=False):
+        """ Get the specified stream's configuration """
+
         if default:
             try:
                 return self.config.cfg[stream]
@@ -107,8 +109,9 @@ class DABStreams():
 
             return None
 
-    # Change the configuration for a stream, used for stream replacement mainly
     def setcfg(self, stream, newcfg=None):
+        """ Change the configuration for a stream, used for stream replacement mainly """
+
         i = 0
         for s, t, c, o in self.streams:
             # Get the current stream

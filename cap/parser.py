@@ -27,8 +27,9 @@ import utils
 logger = logging.getLogger('server.cap')
 msg_counter = 0
 
-# CAP message parser, this parser only parses looks at the subset of the CAP v1.2 standard supported by Dutch brokers
 class CAPParser():
+    """ CAP message parser, this parser only parses looks at the subset of the CAP v1.2 standard supported by Dutch brokers """
+
     # Constants
     TYPE_LINK_TEST = 0
     TYPE_ALERT     = 1
@@ -54,8 +55,9 @@ class CAPParser():
 
         self.msg_type = None
 
-    # Generate a current timestamp
     def generate_timestamp(self):
+        """ Generate a current timestamp """
+
         timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
 
         # convert current time to string
@@ -64,12 +66,13 @@ class CAPParser():
         # add a colon separator to the UTC offset (as required by the CAP v1.2 standard)
         return '{0}:{1}'.format(timestamp[:-2], timestamp[-2:])
 
-    # Generate an acknowledgement
-    # This applies to all types of requests as they all expect the same format of acknowledgement.
     def generate_response(self, ref_identifier, ref_sender, ref_sent):
-        global msg_counter
+        """
+        Generate an acknowledgement
+        This applies to all types of requests as they all expect the same format of acknowledgement.
+        """
 
-        capns = self.NS['CAPv1.2']
+        global msg_counter
 
         root = Xml.Element('alert')
         root.attrib = { 'xmlns': self.NS['CAPv1.2'] }
@@ -99,16 +102,18 @@ class CAPParser():
 
         return Xml.tostring(root, encoding='unicode', xml_declaration=True)
 
-    # Check if the timestamp that has been received is valid
     @staticmethod
     def get_datetime(timestamp):
+        """ Check if the timestamp that has been received is valid """
+
         try:
             return datetime.datetime.strptime(timestamp, CAPParser.TIMESTAMP_FORMAT)
         except ValueError:
             return None
 
-    # Check the elements in the <info> container for CAP v1.2 and NL broker conformity
     def __check_info_elements(self, info):
+        """ Check the elements in the <info> container for CAP v1.2 and NL broker conformity """
+
         # List of _required_ elements in the <info> container
         info_elements = ('category', 'event', 'urgency', 'severity', 'certainty')
 
@@ -154,8 +159,9 @@ class CAPParser():
 
         return True
 
-    # Check the elements in the <alert> container for CAP v1.2 and NL broker conformity
     def __check_elements(self, alert):
+        """ Check the elements in the <alert> container for CAP v1.2 and NL broker conformity """
+
         # List of _required_ elements in the <alert> container
         alert_elements = ('identifier', 'sender', 'sent', 'status', 'msgType', 'scope')
 
@@ -205,8 +211,8 @@ class CAPParser():
 
         return True
 
-    # Parse the references tag into a list with a dictionary
     def __parse_references(self, refs):
+        """ Parse the references tag into a list with a dictionary """
         msgs = []
 
         # Parse the references(s) in the format CAPv1.2 describes
@@ -220,12 +226,15 @@ class CAPParser():
 
         return msgs
 
-    # Attempt to parse the raw XML (from a webpage for instance) into memory and check
-    # if required elements are present
-    # Return bool:
-    # - True on success
-    # - False on failure
     def parse(self, raw):
+        """
+        Attempt to parse the raw XML (from a webpage for instance) into memory and check
+        if required elements are present
+        Return bool:
+        - True on success
+        - False on failure
+        """
+
         # Parse the received XML
         try:
             root = Xml.fromstring(raw)

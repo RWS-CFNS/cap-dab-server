@@ -19,7 +19,7 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-# List of (European) DAB countries
+""" List of (European) DAB countries """
 # TODO Add support for Africa, Asia, North America
 COUNTRY_IDS = {
     'Albania':              (0xE0, 0x9),
@@ -96,7 +96,7 @@ COUNTRY_IDS = {
     'Vatican':              (0xE2, 0x4)
 }
 
-# List of (supported) DAB announcement types
+""" List of (supported) DAB announcement types """
 ANNOUNCEMENT_TYPES = {
     'Alarm':        'Alarm announcement (Urgent)',
     'Traffic':      'Road Traffic flash',
@@ -112,7 +112,7 @@ ANNOUNCEMENT_TYPES = {
     'Finance':      'Finance report'
 }
 
-# List of supported DAB Programme Types
+""" List of supported DAB Programme Type """
 # TODO Add support for North American Programme Types
 PROGRAMME_TYPES = {
      0: ('None',        'No programme type'),

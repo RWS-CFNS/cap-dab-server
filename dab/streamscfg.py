@@ -27,15 +27,13 @@ import logging      # Logging facilities
 logger = logging.getLogger('server.dab')
 
 class StreamsConfig():
-    """
-    streams.ini config file wrapper class
-    """
+    """ streams.ini config file wrapper class """
     def __init__(self):
         self._cfgfile = None
         self._oldcfg = None
         self.cfg = configparser.ConfigParser()
 
-    def load(self, cfgfile: str):
+    def load(self, cfgfile:str):
         if cfgfile is None:
             return False
 
@@ -55,9 +53,13 @@ class StreamsConfig():
         return True
 
     def save(self):
+        """ Save a temporary copy of the current config file in memory """
+
         self._oldcfg = copy.deepcopy(self.cfg)
 
     def restore(self):
+        """ Restore the temporary copy made with save() """
+
         if self._oldcfg is None:
             return
 
@@ -65,5 +67,7 @@ class StreamsConfig():
         self._oldcfg = None
 
     def write(self):
+        """ Write the config to a file """
+
         with open(self._cfgfile, 'w') as f:
             self.cfg.write(f)

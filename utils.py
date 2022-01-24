@@ -19,18 +19,24 @@
 #    along with cap-dab-server. If not, see <https://www.gnu.org/licenses/>.
 #
 
-import copy     # For creating a copy on the stream configuration
-import os       # For file I/O
-import stat     # For checking if output is a FIFO
-import tempfile # For creating a temporary FIFO
-import uuid     # For generating random FIFO file names
-import zmq      # For signalling (alarm) announcements to ODR-DabMux
+from configparser import ConfigParser           # For parsing the server config
+import copy                                     # For creating a copy on the stream configuration
+import logging                                  # Logging facilities
+import os                                       # For file I/O
+import stat                                     # For checking if output is a FIFO
+import tempfile                                 # For creating a temporary FIFO
+import uuid                                     # For generating random FIFO file names
+import zmq                                      # For signalling (alarm) announcements to ODR-DabMux
+from dab.boost_info_parser import BoostInfoTree # For parsing the multiplexer config
+from dab.streams import DABStreams              # DAB streams
 
-# Log via logging.error or logging.warning depending on whether strict CAP parsing is enforced or not
-# Return bool:
-# - True if strict parsing is enabled
-# - False if strict parsing is disabled
-def logger_strict(logger, strict: bool, msg: str):
+def logger_strict(logger:logging.Logger, strict:bool, msg:str) -> bool:
+    """
+    Log via logging.error or logging.warning depending on whether strict CAP parsing is enforced or not.
+
+    Return True if strict parsing is enabled or False if strict parsing is disabled
+    """
+
     if strict:
         logger.error(msg)
         return True
@@ -38,8 +44,15 @@ def logger_strict(logger, strict: bool, msg: str):
         logger.warning(msg)
         return False
 
-# Create a new fifo (based on an specified path or if path is None, a new temporary file)
-def create_fifo(path=None):
+def create_fifo(path:str=None) -> str:
+    """
+    Create a new named pipe (FIFO) with the specified path. If path is None, a new temporary file will be created.
+
+    An Exception exception is raised if the FIFO cannot be created.
+
+    Return a string with the file path of the newly created FIFO
+    """
+
     if path is None:
         # Create a new temporary file if no path was specified
         path = os.path.join(tempfile.mkdtemp(), str(uuid.uuid4()))
@@ -65,15 +78,26 @@ def create_fifo(path=None):
 
     return path
 
-def remove_fifo(path):
+def remove_fifo(path:str):
+    """
+    Remove a fifo created with create_fifo().
+
+    An OSError exception is raised if the FIFO could not be removed.
+    """
+
     try:
         os.remove(path)
         os.rmdir(os.path.dirname(path))
     except OSError:
         pass
 
-# Send a message over ZeroMQ to ODR-DabMux
-def mux_send(sock, msgs):
+def mux_send(sock, msgs:tuple) -> str | None:
+    """
+    Send a message over ZeroMQ to ODR-DabMux and wait for a reply.
+
+    Return the received message
+    """
+
     # TODO handle failed scenario
 
     # Perform a quick ping test
@@ -100,24 +124,30 @@ def mux_send(sock, msgs):
 
     return res
 
-# FIXME the way this function is integrated in the application is not very elegant
-#       it works, but it's ugly
-def replace_streams(zmqsock, config, muxcfg, streams, input_type=None, inputuri=None, data_streams=False):
+def replace_streams(zmqsock, srvcfg:ConfigParser, muxcfg:BoostInfoTree, streams:DABStreams, input_type:str=None, inputuri:str=None, data_streams:bool=False):
+    """
+    Replace all streams which support Alarm announcements with the specified input and input_type.
+
+    An exception is raised in case any stream wasn't able to be replaced.
+    """
+    # FIXME the way this function is integrated in the application is not very elegant
+    #       it works, but it's ugly
+
     alarm_on = input_type is not None or inputuri is not None
 
     for sname, service in muxcfg.services:
         # Check if this service supports alarm announcements
         # TODO also support Warning announcement
         alarm = service.announcements.getboolean('Alarm')
-        if alarm is None or alarm == False:
+        if not alarm:
             continue
 
         if alarm_on:
             # Replace the service Label and PTY to the one configured for Alarm announcements
             # FIXME create a setting for this, don't hardcode!!!
-            label = config['warning']['label']
-            shortlabel = config['warning']['shortlabel']
-            pty = config['warning']['pty']
+            label = srvcfg['warning']['label']
+            shortlabel = srvcfg['warning']['shortlabel']
+            pty = srvcfg['warning']['pty']
         else:
             # Restore the original service labels
             # FIXME generate shortlabel if there's no shortlabel
@@ -170,5 +200,5 @@ def replace_streams(zmqsock, config, muxcfg, streams, input_type=None, inputuri=
                         # Restore the old stream
                         streams.setcfg(s)
 
-            if found == False:
+            if not found:
                 raise Exception(f'Misconfiguration: stream "{subchannel}" was not found in streams.ini!')

@@ -34,9 +34,12 @@ logger = logging.getLogger('server.cap')
 
 # TODO take a textfile with a list of accepted senders as input
 
-# Werkzeug adds colors to the log file by default.
-# Unfortunately, dialog can't display this, so this has to be filtered out.
 class StripEsc(logging.Filter):
+    """
+    Werkzeug adds colors to the log file by default.
+    Unfortunately, dialog can't display this, so this has to be filtered out.
+    """
+
     def __init__(self):
         # Don't bother with just colors, removing all escape sequences is more straightforward
         self.esc = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
@@ -56,13 +59,13 @@ class StripEsc(logging.Filter):
 
         return True
 
-# Actual Werkzeug/Flask server thread
 class CAPHTTP(threading.Thread):
-    def __init__(self, app, config):
+    """ Actual Werkzeug/Flask server thread """
+    def __init__(self, app, srvcfg):
         threading.Thread.__init__(self)
 
-        host = config['cap']['host']
-        port = int(config['cap']['port'])
+        host = srvcfg['cap']['host']
+        port = int(srvcfg['cap']['port'])
 
         self.server = make_server(host, port, app)
         self.ctx = app.app_context()
@@ -140,15 +143,15 @@ class CAPServer():
         xml = cp.generate_response(cp.identifier, cp.sender, cp.sent)
         return flask.Response(response=xml, status=200, content_type='application/xml; charset=utf-8')
 
-    def __init__(self, config, q):
+    def __init__(self, srvcfg, q):
         self.app = flask.Flask(__name__)
 
-        self._srvcfg = config
+        self._srvcfg = srvcfg
         self._q = q
 
-        self._logdir = config['general']['logdir']
-        self._logsize = int(config['general']['max_log_size']) * 1024
-        self._strict = config['cap'].getboolean('strict_parsing')
+        self._logdir = srvcfg['general']['logdir']
+        self._logsize = int(srvcfg['general']['max_log_size']) * 1024
+        self._strict = srvcfg['cap'].getboolean('strict_parsing')
 
         self._cap = None
 

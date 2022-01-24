@@ -1,4 +1,6 @@
 #
+# Rewritten in Python from: https://github.com/Opendigitalradio/data-over-dab-example/blob/master/src/packager.cpp
+#
 # Copyright (C) 2017 Opendigitalradio (http://www.opendigitalradio.org/)
 # Copyright (C) 2017 Felix Morgner <felix.morgner@hsr.ch>
 # Copyright (C) 2017 Tobias Stauber <tobias.stauber@hsr.ch>
@@ -30,16 +32,17 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-import configparser     # Python INI file parser
-import os               # For creating directories
-import struct			# For generating DAB MSC and Packet headers
-import multiprocessing  # Multiprocessing support (for running data streams in the background)
+from configparser import ConfigParser   # For parsing the server config
+import os                               # For creating directories
+import struct			                # For generating DAB MSC and Packet headers
+import multiprocessing                  # Multiprocessing support (for running data streams in the background)
 import utils
 
-# Calculate Packet/MSC data group CRC according to ETSI EN 300 401 V2.1.1 Sections 5.3.2.3 and 5.3.3.4
-def crc16(data):
+def _crc16(data:bytearray) -> bytes:
+    """ Calculate Packet/MSC data group CRC according to ETSI EN 300 401 V2.1.1 Sections 5.3.2.3 and 5.3.3.4 """
+
     if data is None:
-        return 0
+        return bytes(0)
 
     crc = 0xFFFF
 
@@ -52,17 +55,22 @@ def crc16(data):
 
     return struct.pack('!H', crc)
 
-def to_bytes(x: int) -> bytes:
+def _to_bytes(x:int) -> bytes:
+    """ Convert an single byte represented as an int to a big endian byte object """
+
     return x.to_bytes(1, 'big')
 
 class MSCDataGroupBuilder():
+    """ Class to split arbitrary data into MSC Data Groups """
+
     def __init__(self):
         self.last_data = None
         self.coni = 15
         self.repi = 0
 
-    # Build the MSC data group header (ETSI EN 300 401 V2.1.1 Section 5.3.3)
-    def _build_header(self):
+    def _build_header(self) -> bytes:
+        """ Build the MSC data group header (ETSI EN 300 401 V2.1.1 Section 5.3.3) """
+
         byte0  = 0 << 7         # Extension flag
         byte0 |= 1 << 6         # CRC flag
         byte0 |= 0 << 5         # Segment flag
@@ -71,9 +79,9 @@ class MSCDataGroupBuilder():
         byte1 |= self.coni << 4 # Continuity index
         byte1 |= self.repi      # Repetition index
 
-        return struct.pack('<cc', to_bytes(byte0), to_bytes(byte1))
+        return struct.pack('<cc', _to_bytes(byte0), _to_bytes(byte1))
 
-    def build(self, data):
+    def build(self, data:bytes) -> bytearray:
         if self.last_data == None or self.last_data != data:
             self.coni = (self.coni + 1) % 16
             self.repi = 0
@@ -86,7 +94,7 @@ class MSCDataGroupBuilder():
 
         packet = bytearray(self._build_header())
         packet.extend(data)
-        packet.extend(crc16(packet))
+        packet.extend(_crc16(packet))
 
         return packet
 
@@ -94,13 +102,14 @@ class PacketBuilder():
     PACKET_LENGTH =      (24,                    48,                    72,                    96                  )
     PACKET_DATA_LENGTH = (PACKET_LENGTH[0] - 5,  PACKET_LENGTH[1] - 5,  PACKET_LENGTH[2] - 5,  PACKET_LENGTH[3] - 5)
 
-    def __init__(self, packet_address):
+    def __init__(self, packet_address:int):
         self.first_last = 0b11
         self.coni = 0
         self.address = packet_address & 0xFFFF
 
-    # Build the Packet header (ETSI EN 300 401 V2.1.1 Section 5.3.2.1)
-    def _build_header(self, packet_length, data_length):
+    def _build_header(self, packet_length:int, data_length:int) -> bytes:
+        """ Build the Packet header (ETSI EN 300 401 V2.1.1 Section 5.3.2.1) """
+
         byte0 = 0
 
         # Packet length
@@ -121,21 +130,22 @@ class PacketBuilder():
         byte2  = 0 << 7                         # Command = Data packet
         byte2 |= data_length                    # Useful data length
 
-        return struct.pack('<ccc', to_bytes(byte0), to_bytes(byte1), to_bytes(byte2))
+        return struct.pack('<ccc', _to_bytes(byte0), _to_bytes(byte1), _to_bytes(byte2))
 
-    def _build_packet(self, data, packet_length, data_length):
+    def _build_packet(self, data:bytes, packet_length:int, data_length:int) -> bytearray:
         # Calculate number of padding bytes conforming to ETSI EN 300 401 V2.1.1 Section 5.3.2.2
         padding_length = packet_length - 5 - data_length
 
         packet = bytearray(self._build_header(packet_length, data_length))
         packet.extend(data)
-        packet += to_bytes(0b0) * padding_length
-        packet.extend(crc16(packet))
+        packet += _to_bytes(0b0) * padding_length
+        packet.extend(_crc16(packet))
 
         return packet
 
-    def build(self, data):
+    def build(self, data:bytes) -> bytearray:
         data_length = len(data)
+        i = 0
 
         for i in reversed(range(-1, len(self.PACKET_LENGTH))):
             # Attempt to fit data into the smallest possible packet size
@@ -170,23 +180,26 @@ class PacketBuilder():
 
         return self._build_packet(data, self.PACKET_LENGTH[i + 1], data_length)
 
-# This class represents an audio stream as a thread, defined in streams.ini
 class DABDataStream(multiprocessing.Process):
+    """
+    This class represents a data stream as a thread, defined in streams.ini
+    """
+
     # FIFO read buffer size
     # TODO configure in GUI
     BUFFER_SIZE = 1024
 
-    def __init__(self, config: configparser.ConfigParser, name: str, streamcfg, output):
+    def __init__(self, srvcfg:ConfigParser, name:str, streamcfg, output_path:str):
         multiprocessing.Process.__init__(self)
 
         self.name = name
-        self.input = streamcfg['input']
-        self.output = output
+        self.input_path = streamcfg['input']
+        self.output_path = output_path
 
         self.group_builder = MSCDataGroupBuilder()
         self.packet_builder = PacketBuilder(1000) # FIXME don't hardcode the packet address, allow configuring in GUI
 
-        self.streamdir = f'{config["general"]["logdir"]}/streams/{self.name}'
+        self.streamdir = f'{srvcfg["general"]["logdir"]}/streams/{self.name}'
 
         # Create a directory structure for the stream to save logs to and load DLS and MOT information from
         os.makedirs(self.streamdir, exist_ok=True)
@@ -206,9 +219,11 @@ class DABDataStream(multiprocessing.Process):
         self._running = True
 
     def run(self):
+        """ Start this data stream """
+
         while self._running:
-            with open(self.input, 'rb') as infile:
-                with open(self.output, 'wb') as outfifo:
+            with open(self.input_path, 'rb') as infile:
+                with open(self.output_path, 'wb') as outfifo:
                     # Read in blocks to prevent having to load all file contents into memory
                     while self._running:
                         indata = infile.read(self.BUFFER_SIZE)
@@ -226,7 +241,9 @@ class DABDataStream(multiprocessing.Process):
                         outfifo.write(packets)
                         outfifo.flush()
 
-    def join(self, timeout=3):
+    def join(self, timeout:int=3):
+        """ Stop this data stream """
+
         if not self.is_alive():
             return
 
